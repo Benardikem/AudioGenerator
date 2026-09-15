@@ -83,9 +83,11 @@ class CommercialAudioEngine {
     }
   }
 
-  // Start smooth background music bed (warm ambient radio groove)
-  startBgmBed(volume = 0.18) {
-    if (this.isBgmPlaying) return;
+  // Start smooth background music bed tailored for video overlay (Lo-Fi or Ambient Pad)
+  startBgmBed(volume = 0.14, theme: 'lofi' | 'ambient' | 'radio' = 'lofi') {
+    if (this.isBgmPlaying) {
+      this.stopBgmBed();
+    }
     try {
       const ctx = this.getContext();
       this.isBgmPlaying = true;
@@ -94,60 +96,142 @@ class CommercialAudioEngine {
       this.bgmGain.gain.setValueAtTime(volume, ctx.currentTime);
       this.bgmGain.connect(ctx.destination);
 
-      // Harmonious chord progression (Am -> F -> C -> G) with warm filter
-      const chords = [
-        [220, 261.63, 329.63], // Am
-        [174.61, 220, 261.63], // F
-        [130.81, 164.81, 196.0], // C
-        [196.0, 246.94, 293.66], // G
-      ];
+      if (theme === 'lofi') {
+        // Smooth Neo-Soul / Lo-Fi 7th Chords (Dm7 -> G7 -> Cmaj7 -> Am7)
+        const lofiChords = [
+          [146.83, 220.0, 261.63, 349.23], // Dm7
+          [196.0, 246.94, 293.66, 349.23],  // G7
+          [130.81, 196.0, 246.94, 329.63], // Cmaj7
+          [220.0, 261.63, 329.63, 392.0],  // Am7
+        ];
 
-      let step = 0;
-      const playStep = () => {
-        if (!this.isBgmPlaying || !this.bgmGain) return;
-        const now = ctx.currentTime;
-        const currentChord = chords[step % chords.length];
+        let step = 0;
+        const playLofiStep = () => {
+          if (!this.isBgmPlaying || !this.bgmGain) return;
+          const now = ctx.currentTime;
+          const currentChord = lofiChords[step % lofiChords.length];
 
-        currentChord.forEach((freq) => {
-          const osc = ctx.createOscillator();
-          const noteGain = ctx.createGain();
-          const filter = ctx.createBiquadFilter();
+          currentChord.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const noteGain = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
 
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(freq, now);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.02);
 
-          filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(1200, now);
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(900, now); // Warm lo-fi roll-off
 
-          noteGain.gain.setValueAtTime(0.001, now);
-          noteGain.gain.linearRampToValueAtTime(0.08, now + 0.3);
-          noteGain.gain.exponentialRampToValueAtTime(0.001, now + 2.3);
+            noteGain.gain.setValueAtTime(0.001, now);
+            noteGain.gain.linearRampToValueAtTime(0.06, now + 0.15);
+            noteGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
 
-          osc.connect(filter);
-          filter.connect(noteGain);
-          noteGain.connect(this.bgmGain!);
+            osc.connect(filter);
+            filter.connect(noteGain);
+            noteGain.connect(this.bgmGain!);
 
-          osc.start(now);
-          osc.stop(now + 2.4);
-        });
+            osc.start(now);
+            osc.stop(now + 2.6);
+          });
 
-        // Add soft subtle acoustic kick pulse on downbeat
-        const kickOsc = ctx.createOscillator();
-        const kickGain = ctx.createGain();
-        kickOsc.frequency.setValueAtTime(110, now);
-        kickOsc.frequency.exponentialRampToValueAtTime(35, now + 0.2);
-        kickGain.gain.setValueAtTime(0.12, now);
-        kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-        kickOsc.connect(kickGain);
-        kickGain.connect(this.bgmGain!);
-        kickOsc.start(now);
-        kickOsc.stop(now + 0.26);
+          // Soft lo-fi brush pulse
+          const noiseOsc = ctx.createOscillator();
+          const noiseGain = ctx.createGain();
+          noiseOsc.frequency.setValueAtTime(65, now);
+          noiseGain.gain.setValueAtTime(0.05, now);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          noiseOsc.connect(noiseGain);
+          noiseGain.connect(this.bgmGain!);
+          noiseOsc.start(now);
+          noiseOsc.stop(now + 0.16);
 
-        step++;
-      };
+          step++;
+        };
 
-      playStep();
-      this.bgmInterval = setInterval(playStep, 2400);
+        playLofiStep();
+        this.bgmInterval = setInterval(playLofiStep, 2600);
+      } else if (theme === 'ambient') {
+        // Atmospheric pad with subtle slow swell
+        const ambientPads = [
+          [174.61, 220.0, 329.63], // Fmaj9
+          [130.81, 196.0, 293.66], // Cadd9
+        ];
+        let step = 0;
+        const playAmbientStep = () => {
+          if (!this.isBgmPlaying || !this.bgmGain) return;
+          const now = ctx.currentTime;
+          const chord = ambientPads[step % ambientPads.length];
+
+          chord.forEach((freq) => {
+            const osc = ctx.createOscillator();
+            const noteGain = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(600, now);
+
+            noteGain.gain.setValueAtTime(0.001, now);
+            noteGain.gain.linearRampToValueAtTime(0.04, now + 0.8);
+            noteGain.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
+
+            osc.connect(filter);
+            filter.connect(noteGain);
+            noteGain.connect(this.bgmGain!);
+
+            osc.start(now);
+            osc.stop(now + 4.0);
+          });
+          step++;
+        };
+        playAmbientStep();
+        this.bgmInterval = setInterval(playAmbientStep, 4000);
+      } else {
+        // Harmonious chord progression (Am -> F -> C -> G) with warm filter
+        const chords = [
+          [220, 261.63, 329.63], // Am
+          [174.61, 220, 261.63], // F
+          [130.81, 164.81, 196.0], // C
+          [196.0, 246.94, 293.66], // G
+        ];
+
+        let step = 0;
+        const playStep = () => {
+          if (!this.isBgmPlaying || !this.bgmGain) return;
+          const now = ctx.currentTime;
+          const currentChord = chords[step % chords.length];
+
+          currentChord.forEach((freq) => {
+            const osc = ctx.createOscillator();
+            const noteGain = ctx.createGain();
+            const filter = ctx.createBiquadFilter();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1200, now);
+
+            noteGain.gain.setValueAtTime(0.001, now);
+            noteGain.gain.linearRampToValueAtTime(0.08, now + 0.3);
+            noteGain.gain.exponentialRampToValueAtTime(0.001, now + 2.3);
+
+            osc.connect(filter);
+            filter.connect(noteGain);
+            noteGain.connect(this.bgmGain!);
+
+            osc.start(now);
+            osc.stop(now + 2.4);
+          });
+
+          step++;
+        };
+
+        playStep();
+        this.bgmInterval = setInterval(playStep, 2400);
+      }
     } catch (e) {
       console.warn('Could not start BGM bed:', e);
     }

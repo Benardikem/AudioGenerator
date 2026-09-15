@@ -19,14 +19,69 @@ Search the business. Say what happened. Good or bad.
 No business can pay to remove an honest review.
 Save someone's money. Legit Africa dot com. It's free.`;
 
-export const COMMERCIAL_PRESETS: CommercialPreset[] = [
+export const SOCIAL_PRESETS: CommercialPreset[] = [
   {
     id: 'original',
-    title: 'Standard 30s Spot',
-    timing: '~25-30s',
+    title: 'Social Video Overlay (Original)',
+    timing: '~25s',
+    suggestedVoice: 'Fenrir_Baritone',
+    suggestedStyle: 'creator_pov',
+    description: 'The requested 7-line script with deep masculine baritone voiceover formatted for video background.',
+    script: DEFAULT_SCRIPT,
+  },
+  {
+    id: 'reels_hook',
+    title: 'Reels / TikTok Hook',
+    timing: '~18s',
+    suggestedVoice: 'Charon_Bass',
+    suggestedStyle: 'social_warning',
+    description: 'Scroll-stopping heavy bass advisory designed to grab attention immediately.',
+    script: `Ever paid a tailor and then they stop picking your calls?
+Now another buyer is about to pay that exact same seller.
+Tell them what you know on Legit Africa.
+Search the business. Say what happened. Good or bad.
+No business can pay to remove an honest review.
+Save someone's money. Legit Africa dot com. It's free.`,
+  },
+  {
+    id: 'storytime_video',
+    title: 'Storytime POV Overlay',
+    timing: '~28s',
+    suggestedVoice: 'Fenrir_Baritone',
+    suggestedStyle: 'storytime',
+    description: 'Relatable storytelling baritone voiceover designed to sit beneath talking head or B-roll.',
+    script: `Maybe the tailor delivered on time, neat and clean.
+Or maybe you sent money and they completely ghosted you.
+Right now, another person is about to make that same transfer.
+Save someone's hard-earned money.
+Go on Legit Africa dot com. Search the business. Share your experience.
+Nobody can buy off an honest review. It's 100% free.`,
+  },
+  {
+    id: 'pidgin_social',
+    title: 'Pidgin Social Story',
+    timing: '~25s',
+    suggestedVoice: 'Fenrir_Baritone',
+    suggestedStyle: 'creator_pov',
+    description: 'Everyday relatable African street tone for TikTok/Instagram in deep baritone cadence.',
+    script: `Maybe that tailor sew your cloth sharp sharp.
+Or that seller stop picking your calls after payment.
+Right now, another person dey about to transfer money give that same person!
+Abeg, tell them wetin you know. On Legit Africa.
+Search the business. Say what happened. Good or bad.
+No business fit pay to delete honest review.
+Save person money. Legit Africa dot com. E free die!`,
+  },
+];
+
+export const BROADCAST_PRESETS: CommercialPreset[] = [
+  {
+    id: 'radio_30s',
+    title: 'Standard 30s Radio Spot',
+    timing: '~30s',
     suggestedVoice: 'Kore',
     suggestedStyle: 'commercial',
-    description: 'The requested original script: crisp, balanced, and direct.',
+    description: 'High-clarity broadcast spot with traditional commercial announcer pacing.',
     script: DEFAULT_SCRIPT,
   },
   {
@@ -43,23 +98,8 @@ No business can buy off a bad rating.
 Save someone's money. Legit Africa dot com. It's free!`,
   },
   {
-    id: 'pidgin_blend',
-    title: 'Pidgin Radio Blend',
-    timing: '~30s',
-    suggestedVoice: 'Puck',
-    suggestedStyle: 'punchy',
-    description: 'Vibrant local radio blend connecting with everyday street shoppers.',
-    script: `Maybe that tailor sew your cloth sharp sharp.
-Or that vendor block your number after payment.
-Right now, another person dey about to transfer money give that same seller!
-Abeg, tell them wetin you know. On Legit Africa.
-Search the business. Talk your mind. Good or bad.
-Nobody fit pay us make we delete honest review.
-Save person money today. Legit Africa dot com. E free die!`,
-  },
-  {
     id: 'extended_60s',
-    title: '60s Story Commercial',
+    title: '60s Broadcast Narrative',
     timing: '~50-60s',
     suggestedVoice: 'Fenrir',
     suggestedStyle: 'advocate',
@@ -89,10 +129,11 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   onApplyPreset,
 }) => {
   const [isPolishing, setIsPolishing] = useState(false);
-  const [polishStyle, setPolishStyle] = useState('radio_30s');
+  const [polishStyle, setPolishStyle] = useState('social_reels');
+  const [presetTab, setPresetTab] = useState<'social' | 'broadcast'>('social');
 
   const words = script.trim() ? script.trim().split(/\s+/).length : 0;
-  // Professional voiceover pacing: ~130 words per minute (~2.15 words per second)
+  // Natural social video voiceover pacing: ~130 words per minute (~2.15 words per second)
   const estimatedSeconds = Math.round(words / 2.15);
 
   const handlePolishScript = async () => {
@@ -118,13 +159,15 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     onChangeScript(DEFAULT_SCRIPT);
   };
 
+  const currentPresets = presetTab === 'social' ? SOCIAL_PRESETS : BROADCAST_PRESETS;
+
   return (
     <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-5">
       {/* Header & Preset Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-stone-100">
         <div className="flex items-center gap-2">
           <FileText className="w-5 h-5 text-emerald-700" />
-          <h3 className="font-bold text-slate-900">Commercial Voiceover Script</h3>
+          <h3 className="font-bold text-slate-900">Voiceover Script & Timings</h3>
         </div>
 
         {/* Word and time badge */}
@@ -134,7 +177,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
           </span>
           <span className="flex items-center gap-1 font-mono font-semibold bg-emerald-50 text-emerald-800 px-2.5 py-1 rounded-lg">
             <Clock className="w-3.5 h-3.5" />
-            Est. ~{estimatedSeconds}s
+            Est. ~{estimatedSeconds}s audio
           </span>
           <button
             id="reset-script-btn"
@@ -149,13 +192,40 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
         </div>
       </div>
 
-      {/* Script Preset Buttons */}
+      {/* Preset Category Switcher */}
       <div>
-        <div className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">
-          Commercial Script Formats
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">
+            Script Formats
+          </span>
+          <div className="flex bg-stone-100 p-0.5 rounded-lg text-xs">
+            <button
+              type="button"
+              onClick={() => setPresetTab('social')}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                presetTab === 'social'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-stone-600 hover:text-slate-900'
+              }`}
+            >
+              📱 Social Video Overlay
+            </button>
+            <button
+              type="button"
+              onClick={() => setPresetTab('broadcast')}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                presetTab === 'broadcast'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-stone-600 hover:text-slate-900'
+              }`}
+            >
+              📻 Retained Radio Jingles
+            </button>
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {COMMERCIAL_PRESETS.map((p) => {
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          {currentPresets.map((p) => {
             const isActive = script.trim() === p.script.trim();
             return (
               <button
@@ -170,9 +240,10 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs">{p.title}</span>
+                  <span className="text-xs font-semibold">{p.title}</span>
                   <span className="text-[10px] text-stone-500 font-mono">{p.timing}</span>
                 </div>
+                <p className="text-[11px] text-stone-500 mt-1 line-clamp-1">{p.description}</p>
               </button>
             );
           })}
@@ -186,12 +257,12 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
           value={script}
           onChange={(e) => onChangeScript(e.target.value)}
           rows={7}
-          placeholder="Enter commercial voiceover script..."
+          placeholder="Enter video voiceover script..."
           className="w-full p-4 text-slate-800 text-base leading-relaxed bg-stone-50/40 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-700 focus:border-transparent outline-hidden font-sans resize-y"
         />
         <div className="text-[11px] text-stone-400 mt-1 flex justify-between">
           <span>Tip: Line breaks create natural broadcast speaking pauses in the audio.</span>
-          <span>Target: 20-35 seconds for radio spot</span>
+          <span>Target: 15-30 seconds for TikTok / Instagram Reels</span>
         </div>
       </div>
 
@@ -206,11 +277,13 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
             onChange={(e) => setPolishStyle(e.target.value)}
             className="text-xs bg-white border border-stone-300 rounded-lg px-2.5 py-1 text-slate-700 font-medium outline-hidden"
           >
-            <option value="radio_30s">30s Radio Commercial Spot</option>
-            <option value="punchy_15s">15s Short Bumper Cut</option>
-            <option value="pidgin_blend">Pidgin Urban Radio Cut</option>
-            <option value="urgent_alert">Urgent Consumer Alert</option>
-            <option value="extended_60s">60s Narrative Testimonial</option>
+            <option value="social_reels">TikTok / Reels Video Hook (Viral 20s)</option>
+            <option value="storytime_pov">Storytime Video POV (Relatable 30s)</option>
+            <option value="cinematic_voiceover">Cinematic Documentary Voiceover</option>
+            <option value="pidgin_blend">Pidgin Urban Social Video</option>
+            <option value="urgent_alert">Urgent Consumer Alert Video</option>
+            <option value="radio_30s">Standard 30s Radio Commercial Spot</option>
+            <option value="punchy_15s">15s Short Radio Bumper</option>
           </select>
         </div>
 

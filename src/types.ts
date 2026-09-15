@@ -5,12 +5,33 @@ export interface VoiceOption {
   gender: 'Female' | 'Male';
   tagline: string;
   recommendedFor: string;
+  isBaritone?: boolean;
+  defaultPitch?: 'standard' | 'baritone' | 'bass';
 }
 
 export interface VoiceStyle {
   id: string;
   name: string;
+  category: 'social' | 'broadcast';
   description: string;
+  tag: string;
+}
+
+export interface SubtitleCue {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface VideoTheme {
+  id: string;
+  name: string;
+  category: string;
+  type: 'video' | 'canvas' | 'custom';
+  description: string;
+  previewColor: string;
+  accentColor: string;
 }
 
 export interface GeneratedCommercial {
@@ -20,6 +41,7 @@ export interface GeneratedCommercial {
   voice: string;
   voiceName: string;
   style: string;
+  timbre?: 'standard' | 'baritone' | 'bass';
   script: string;
   createdAt: number;
 }
