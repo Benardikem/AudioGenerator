@@ -94,6 +94,10 @@ app.post("/api/generate-commercial-audio", async (req, res) => {
     // Style prompt directive instructing the TTS system to capture the right pacing
     let styleDirection = "";
     switch (style) {
+      case "pidgin_warm":
+      case "pidgin_advert":
+        styleDirection = "Speak in a warm, natural Nigerian Pidgin English voiceover. Mature masculine tone, conversational, calm, friendly, not shouting, not radio announcer hype. Pronounce 'Legit Africa' clearly and 'Legit Africa dot com'. Authentic Lagos everyday pacing with natural breathing pauses between lines:";
+        break;
       case "creator_pov":
         styleDirection = "Speak in an intimate, authentic, natural social media creator voice like on TikTok or Instagram Reels. Talk directly to the camera like a real person sharing honest advice with a friend. No sales pitch, no radio announcer hype, just genuine conversational pacing:";
         break;

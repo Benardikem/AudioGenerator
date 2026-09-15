@@ -71,3 +71,12 @@ export interface CommercialPreset {
   suggestedStyle: string;
   description: string;
 }
+
+export interface AdvertScene {
+  id: number;
+  voiceLine: string;
+  visualPrompt: string;
+  imageSrc?: string;
+  type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card';
+}
+

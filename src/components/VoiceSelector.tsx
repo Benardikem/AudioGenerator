@@ -78,6 +78,13 @@ export const VOICE_OPTIONS: VoiceOption[] = [
 export const VOICE_STYLES: VoiceStyle[] = [
   // Social Media Video Overlay Delivery Styles (Primary Focus)
   {
+    id: 'pidgin_warm',
+    name: 'Warm Nigerian Pidgin (Official 30s Advert)',
+    category: 'social',
+    tag: 'Official Campaign',
+    description: 'Natural, warm Nigerian Pidgin narration. Calm, authentic, friendly everyday tone without shouting.',
+  },
+  {
     id: 'creator_pov',
     name: 'TikTok / Reels Creator (POV)',
     category: 'social',
@@ -170,19 +177,19 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
       {/* Delivery Style Category Header & Selection (Social Media vs Radio) */}
       <div>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-stone-600 flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-emerald-700" />
+          <label className="text-xs font-bold uppercase tracking-wider text-[#6B6256] flex items-center gap-1.5">
+            <Award className="w-3.5 h-3.5 text-[#E8A317]" />
             Voiceover Delivery Style & Purpose
           </label>
-          <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs">
+          <div className="flex bg-[#F4EEE2] p-1 rounded-xl border border-[#EAE3D4] text-xs">
             <button
               type="button"
               id="category-social-btn"
               onClick={() => setStyleCategory('social')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+              className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                 styleCategory === 'social'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-slate-900'
+                  ? 'bg-[#E8A317] text-[#181614] shadow-xs'
+                  : 'text-[#6B6256] hover:text-[#181614]'
               }`}
             >
               📱 Social Media Video Overlay (Active)
@@ -191,10 +198,10 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
               type="button"
               id="category-broadcast-btn"
               onClick={() => setStyleCategory('broadcast')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+              className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
                 styleCategory === 'broadcast'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-stone-600 hover:text-slate-900'
+                  ? 'bg-[#E8A317] text-[#181614] shadow-xs'
+                  : 'text-[#6B6256] hover:text-[#181614]'
               }`}
             >
               📻 Radio Commercial Jingles (Retained)
@@ -203,17 +210,17 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
         </div>
 
         {styleCategory === 'social' && (
-          <div className="mb-3 text-xs bg-emerald-50/70 border border-emerald-200 text-emerald-900 px-3 py-2 rounded-xl flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-700 shrink-0" />
+          <div className="mb-3 text-xs bg-[#FBF8F1] border border-[#EAE3D4] text-[#181614] px-3.5 py-2.5 rounded-xl flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#E8A317] shrink-0" />
             <span>
-              <strong>Crafted for Video Backgrounds:</strong> Natural, un-hyped creator voices designed to sit smoothly under video footage on TikTok, Reels, and Shorts.
+              <strong>Crafted for Video Backgrounds:</strong> Warm, natural Nigerian Pidgin and relatable creator pacing designed to sit under 4:5 social video footage.
             </span>
           </div>
         )}
 
         {styleCategory === 'broadcast' && (
-          <div className="mb-3 text-xs bg-amber-50/80 border border-amber-200 text-amber-900 px-3 py-2 rounded-xl flex items-center gap-2">
-            <Award className="w-4 h-4 text-amber-700 shrink-0" />
+          <div className="mb-3 text-xs bg-[#F4EEE2] border border-[#EAE3D4] text-[#181614] px-3.5 py-2.5 rounded-xl flex items-center gap-2">
+            <Award className="w-4 h-4 text-[#E8A317] shrink-0" />
             <span>
               <strong>Retained Radio Templates:</strong> Traditional high-energy radio commercial announcer styles kept for future broadcast campaigns.
             </span>
@@ -229,21 +236,19 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
                 id={`style-btn-${style.id}`}
                 type="button"
                 onClick={() => onSelectStyle(style.id)}
-                className={`p-3 rounded-xl border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                   isSelected
-                    ? style.category === 'social'
-                      ? 'bg-emerald-50 border-emerald-600 text-emerald-950 ring-1 ring-emerald-600'
-                      : 'bg-amber-50 border-amber-500 text-amber-950 ring-1 ring-amber-500'
-                    : 'bg-white border-stone-200 hover:border-stone-300 text-slate-700'
+                    ? 'bg-[#FBF8F1] border-[#E8A317] text-[#181614] ring-1 ring-[#E8A317] shadow-xs'
+                    : 'bg-white border-[#EAE3D4] hover:border-[#E8A317]/50 text-[#181614]'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-bold text-slate-900">{style.name}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-600 font-medium">
+                  <span className="text-xs font-bold text-[#181614]">{style.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#F4EEE2] text-[#6B6256] font-medium">
                     {style.tag}
                   </span>
                 </div>
-                <p className="text-[11px] text-stone-500 leading-snug line-clamp-2">
+                <p className="text-[11px] text-[#6B6256] leading-snug line-clamp-2">
                   {style.description}
                 </p>
               </button>
@@ -255,11 +260,11 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
       {/* Voice Selection Cards */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="text-xs font-bold uppercase tracking-wider text-stone-600 flex items-center gap-1.5">
-            <Mic className="w-3.5 h-3.5 text-emerald-700" />
+          <label className="text-xs font-bold uppercase tracking-wider text-[#6B6256] flex items-center gap-1.5">
+            <Mic className="w-3.5 h-3.5 text-[#E8A317]" />
             Select Voice Narrator
           </label>
-          <span className="text-xs text-stone-500">Gemini 3.1 Flash Neural Audio</span>
+          <span className="text-xs text-[#6B6256]">Gemini 3.1 Flash Neural Audio</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -271,40 +276,40 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
                 id={`voice-btn-${voice.id}`}
                 type="button"
                 onClick={() => handleVoiceClick(voice)}
-                className={`p-3.5 rounded-xl border text-left transition-all relative ${
+                className={`p-3.5 rounded-xl border text-left transition-all relative cursor-pointer ${
                   isSelected
-                    ? 'bg-emerald-50/70 border-emerald-600 shadow-xs ring-1 ring-emerald-600'
-                    : 'bg-white border-stone-200 hover:border-stone-300 hover:bg-stone-50/50'
+                    ? 'bg-[#FBF8F1] border-[#E8A317] shadow-xs ring-1 ring-[#E8A317]'
+                    : 'bg-white border-[#EAE3D4] hover:border-[#E8A317]/50 hover:bg-[#FBF8F1]/40'
                 }`}
               >
                 {isSelected && (
                   <span className="absolute top-2.5 right-2.5 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E8A317] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#E8A317]"></span>
                   </span>
                 )}
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
                     <div
                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                        isSelected ? 'bg-emerald-700 text-white' : 'bg-stone-100 text-stone-700'
+                        isSelected ? 'bg-[#E8A317] text-[#181614]' : 'bg-[#F4EEE2] text-[#181614]'
                       }`}
                     >
                       <User className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-slate-900">{voice.name}</h4>
-                      <span className="text-[11px] text-stone-500">{voice.gender} • {voice.actor}</span>
+                      <h4 className="text-sm font-bold text-[#181614]">{voice.name}</h4>
+                      <span className="text-[11px] text-[#6B6256]">{voice.gender} • {voice.actor}</span>
                     </div>
                   </div>
                   {voice.isBaritone && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F4EEE2] text-[#181614] border border-[#E8A317]">
                       Deep Baritone
                     </span>
                   )}
                 </div>
-                <p className="mt-2 text-xs font-medium text-slate-700 line-clamp-1">{voice.tagline}</p>
-                <p className="mt-1 text-[11px] text-stone-500 line-clamp-2">{voice.recommendedFor}</p>
+                <p className="mt-2 text-xs font-medium text-[#181614] line-clamp-1">{voice.tagline}</p>
+                <p className="mt-1 text-[11px] text-[#6B6256] line-clamp-2">{voice.recommendedFor}</p>
               </button>
             );
           })}
@@ -312,15 +317,15 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
       </div>
 
       {/* Vocal Timbre & Pitch Depth Tuning */}
-      <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200 space-y-3">
+      <div className="p-4 bg-[#F4EEE2] rounded-2xl border border-[#EAE3D4] space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-emerald-800" />
-            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+            <Sliders className="w-4 h-4 text-[#E8A317]" />
+            <span className="text-xs font-bold text-[#181614] uppercase tracking-wider">
               Vocal Timbre & Depth Tuning
             </span>
           </div>
-          <span className="text-[11px] text-stone-500">
+          <span className="text-[11px] text-[#6B6256]">
             Tuning acoustic resonance & low register
           </span>
         </div>
@@ -329,19 +334,19 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
           <button
             type="button"
             onClick={() => onSelectTimbre('baritone')}
-            className={`p-2.5 rounded-xl border text-left transition-all ${
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
               selectedTimbre === 'baritone'
-                ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
-                : 'bg-white border-stone-200 hover:bg-stone-100 text-slate-700'
+                ? 'bg-[#181614] text-white border-[#181614] shadow-xs'
+                : 'bg-white border-[#EAE3D4] hover:bg-[#FBF8F1] text-[#181614]'
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold">🎙️ Deep Baritone</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-mono ${selectedTimbre === 'baritone' ? 'bg-emerald-900 text-amber-300' : 'bg-stone-100 text-stone-600'}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-mono ${selectedTimbre === 'baritone' ? 'bg-[#E8A317] text-[#181614]' : 'bg-[#F4EEE2] text-[#6B6256]'}`}>
                 -1.8 st
               </span>
             </div>
-            <p className={`text-[11px] mt-1 line-clamp-1 ${selectedTimbre === 'baritone' ? 'text-emerald-100' : 'text-stone-500'}`}>
+            <p className={`text-[11px] mt-1 line-clamp-1 ${selectedTimbre === 'baritone' ? 'text-[#F4EEE2]' : 'text-[#6B6256]'}`}>
               Rich masculine chest resonance. Eliminates feminine undertones.
             </p>
           </button>
@@ -349,19 +354,19 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
           <button
             type="button"
             onClick={() => onSelectTimbre('bass')}
-            className={`p-2.5 rounded-xl border text-left transition-all ${
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
               selectedTimbre === 'bass'
-                ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
-                : 'bg-white border-stone-200 hover:bg-stone-100 text-slate-700'
+                ? 'bg-[#181614] text-white border-[#181614] shadow-xs'
+                : 'bg-white border-[#EAE3D4] hover:bg-[#FBF8F1] text-[#181614]'
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold">⚡ Heavy Bass</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-mono ${selectedTimbre === 'bass' ? 'bg-emerald-900 text-amber-300' : 'bg-stone-100 text-stone-600'}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-mono ${selectedTimbre === 'bass' ? 'bg-[#E8A317] text-[#181614]' : 'bg-[#F4EEE2] text-[#6B6256]'}`}>
                 -3.2 st
               </span>
             </div>
-            <p className={`text-[11px] mt-1 line-clamp-1 ${selectedTimbre === 'bass' ? 'text-emerald-100' : 'text-stone-500'}`}>
+            <p className={`text-[11px] mt-1 line-clamp-1 ${selectedTimbre === 'bass' ? 'text-[#F4EEE2]' : 'text-[#6B6256]'}`}>
               Commanding rumbling register with maximum masculine gravitas.
             </p>
           </button>
@@ -369,19 +374,19 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
           <button
             type="button"
             onClick={() => onSelectTimbre('standard')}
-            className={`p-2.5 rounded-xl border text-left transition-all ${
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
               selectedTimbre === 'standard'
-                ? 'bg-emerald-800 text-white border-emerald-900 shadow-xs'
-                : 'bg-white border-stone-200 hover:bg-stone-100 text-slate-700'
+                ? 'bg-[#181614] text-white border-[#181614] shadow-xs'
+                : 'bg-white border-[#EAE3D4] hover:bg-[#FBF8F1] text-[#181614]'
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold">🎵 Natural Standard</span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-mono ${selectedTimbre === 'standard' ? 'bg-emerald-900 text-amber-300' : 'bg-stone-100 text-stone-600'}`}>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-mono ${selectedTimbre === 'standard' ? 'bg-[#E8A317] text-[#181614]' : 'bg-[#F4EEE2] text-[#6B6256]'}`}>
                 Default
               </span>
             </div>
-            <p className={`text-[11px] mt-1 line-clamp-1 ${selectedTimbre === 'standard' ? 'text-emerald-100' : 'text-stone-500'}`}>
+            <p className={`text-[11px] mt-1 line-clamp-1 ${selectedTimbre === 'standard' ? 'text-[#F4EEE2]' : 'text-[#6B6256]'}`}>
               Standard factory model pitch and neutral frequency response.
             </p>
           </button>
@@ -390,3 +395,4 @@ export const VoiceSelector: React.FC<VoiceSelectorProps> = ({
     </div>
   );
 };
+

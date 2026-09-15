@@ -276,16 +276,16 @@ export const GoogleTasksPanel: React.FC<GoogleTasksPanelProps> = ({
       className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-6"
     >
       {/* Panel Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-stone-100">
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#EAE3D4]">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-[#F4EEE2] text-[#E8A317] flex items-center justify-center">
             <CheckSquare className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-slate-900">
+            <h3 className="text-base font-bold text-[#181614]">
               Commercial Campaign Tasks
             </h3>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-[#6B6256]">
               Sync production checklists directly with your Google Tasks account
             </p>
           </div>
@@ -463,14 +463,14 @@ export const GoogleTasksPanel: React.FC<GoogleTasksPanelProps> = ({
               type="text"
               value={newTaskTitle}
               onChange={(e) => setNewTaskTitle(e.target.value)}
-              placeholder="Add task for this commercial (e.g. Submit audio to Cool FM)..."
-              className="grow px-3.5 py-2 text-xs bg-stone-50 border border-stone-200 rounded-xl outline-hidden focus:ring-2 focus:ring-emerald-700 focus:bg-white transition-all text-slate-800"
+              placeholder="Add task for this commercial (e.g. Publish 4:5 video on TikTok)..."
+              className="grow px-3.5 py-2 text-xs bg-[#FBF8F1] border border-[#EAE3D4] rounded-xl outline-hidden focus:ring-2 focus:ring-[#E8A317] focus:bg-white transition-all text-[#181614]"
             />
             <button
               id="create-task-submit-btn"
               type="submit"
               disabled={isCreatingTask || !newTaskTitle.trim()}
-              className="px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1 shrink-0"
+              className="px-4 py-2 text-xs font-bold text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1 shrink-0 cursor-pointer"
             >
               {isCreatingTask ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -484,12 +484,12 @@ export const GoogleTasksPanel: React.FC<GoogleTasksPanelProps> = ({
           {/* Task Items List */}
           <div className="space-y-2">
             {isLoadingTasks ? (
-              <div className="flex items-center justify-center py-8 text-xs text-stone-500 gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
+              <div className="flex items-center justify-center py-8 text-xs text-[#6B6256] gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-[#E8A317]" />
                 Loading tasks from Google...
               </div>
             ) : tasks.length === 0 ? (
-              <div className="text-center py-8 text-stone-400 text-xs bg-stone-50/50 rounded-xl border border-dashed border-stone-200">
+              <div className="text-center py-8 text-[#6B6256] text-xs bg-[#FBF8F1] rounded-xl border border-dashed border-[#EAE3D4]">
                 No tasks in this list yet. Click "Add Ad Production Checklist" to
                 populate commercial to-dos.
               </div>
@@ -502,18 +502,18 @@ export const GoogleTasksPanel: React.FC<GoogleTasksPanelProps> = ({
                     id={`task-row-${task.id}`}
                     className={`flex items-start justify-between gap-3 p-3 rounded-xl border transition-all ${
                       isDone
-                        ? 'bg-stone-50 border-stone-200 opacity-60'
-                        : 'bg-white border-stone-200 hover:border-stone-300 shadow-xs'
+                        ? 'bg-[#F4EEE2] border-[#EAE3D4] opacity-60'
+                        : 'bg-white border-[#EAE3D4] hover:border-[#E8A317] shadow-xs'
                     }`}
                   >
                     <div className="flex items-start gap-3 grow">
                       <button
                         type="button"
                         onClick={() => handleToggleTaskStatus(task)}
-                        className={`mt-0.5 w-4 h-4 rounded-md border flex items-center justify-center transition-colors ${
+                        className={`mt-0.5 w-4 h-4 rounded-md border flex items-center justify-center transition-colors cursor-pointer ${
                           isDone
-                            ? 'bg-emerald-700 border-emerald-700 text-white'
-                            : 'border-stone-400 hover:border-emerald-600 bg-white'
+                            ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                            : 'border-[#EAE3D4] hover:border-[#E8A317] bg-white'
                         }`}
                       >
                         {isDone && <CheckSquare className="w-3.5 h-3.5" />}

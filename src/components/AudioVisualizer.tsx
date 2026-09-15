@@ -247,16 +247,16 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
           <button
             id="copy-commercial-script-btn"
             onClick={handleCopyScript}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#181614] bg-[#F4EEE2] hover:bg-[#EAE3D4] rounded-xl transition-colors cursor-pointer"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
+            {copied ? <Check className="w-3.5 h-3.5 text-[#E8A317]" /> : <Share2 className="w-3.5 h-3.5" />}
             {copied ? 'Script Copied' : 'Copy Script'}
           </button>
           <a
             id="download-commercial-wav-btn"
             href={audioUrl}
             download="legit-africa-commercial.wav"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] rounded-xl transition-colors shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
             Download WAV
@@ -308,7 +308,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
           <button
             id="play-pause-commercial-audio-btn"
             onClick={togglePlayPause}
-            className="flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white shadow-md transition-all hover:scale-102 active:scale-98"
+            className="flex items-center justify-center w-12 h-12 rounded-2xl bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] font-bold shadow-md transition-all hover:scale-102 active:scale-98 cursor-pointer"
           >
             {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
           </button>

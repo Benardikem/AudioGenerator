@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+:root {
+  --brand-cream: #FBF8F1;
+  --brand-sand: #F4EEE2;
+  --brand-black: #181614;
+  --brand-grey: #6B6256;
+  --brand-gold: #E8A317;
+  --brand-gold-dark: #C6860C;
+  --brand-star: #F5B301;
+  --brand-border: #EAE3D4;
+}
+
+body {
+  background-color: #FBF8F1;
+  color: #181614;
+}
