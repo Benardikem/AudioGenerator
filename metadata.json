@@ -1,0 +1,6 @@
+{
+  "name": "Legit Africa Audio Generator",
+  "description": "Commercial voiceover audio generator and production task manager for Legit Africa campaigns.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
