@@ -282,7 +282,14 @@ app.post("/api/convert-to-mp4", (req, res) => {
 
   writeStream.on("error", (err) => {
     console.error("Upload write stream error:", err);
-    res.status(500).json({ error: "Failed to upload video stream." });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to upload video stream." });
+    }
+    cleanup();
+  });
+
+  req.on("aborted", () => {
+    console.warn("Client aborted upload stream.");
     cleanup();
   });
 
@@ -293,45 +300,71 @@ app.post("/api/convert-to-mp4", (req, res) => {
         cleanup();
         return res.status(400).json({ error: "Uploaded video payload is empty." });
       }
+      console.log(`Received WebM video (${(stats.size / 1024 / 1024).toFixed(2)} MB), starting fast H.264 MP4 encode...`);
     } catch (e) {
       cleanup();
       return res.status(400).json({ error: "Could not read uploaded video." });
     }
 
     // Convert via ffmpeg to standard Social-Media MP4:
+    // -r 30 : locks 30fps to avoid Chrome's 1k tbr variable framerate slowdown
     // -c:v libx264 : standard H.264 video codec required by Instagram, TikTok, FB, WhatsApp
-    // -preset veryfast : fast encoding
-    // -crf 22 : high visual clarity
+    // -preset ultrafast : blazingly fast encoding (~15s instead of minutes)
+    // -crf 20 : high visual clarity at ultrafast preset
     // -pix_fmt yuv420p : 8-bit YUV 4:2:0 format required for mobile hardware decoding
     // -c:a aac : universal AAC audio codec
-    // -b:a 192k : high fidelity stereo/mono audio
-    // -movflags +faststart : places moov atom at beginning for instant social media upload/streaming
+    // -b:a 192k : high fidelity stereo audio
+    // -movflags +faststart : places moov atom at beginning for instant social media playback
+    // -threads 0 : utilizes all available container CPU cores
     const args = [
       "-y",
       "-i", inputPath,
+      "-r", "30",
       "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", "22",
+      "-preset", "ultrafast",
+      "-crf", "20",
       "-pix_fmt", "yuv420p",
       "-c:a", "aac",
       "-b:a", "192k",
       "-movflags", "+faststart",
+      "-threads", "0",
       outputPath,
     ];
 
     const ffmpeg = spawn("ffmpeg", args);
     let stderrData = "";
 
+    // 60-second safety timeout so it never hangs indefinitely
+    const timeout = setTimeout(() => {
+      console.error("FFmpeg conversion timed out after 60s, terminating process...");
+      ffmpeg.kill("SIGKILL");
+      if (!res.headersSent) {
+        res.status(504).json({ error: "Video conversion timed out. Please try again." });
+      }
+      cleanup();
+    }, 60000);
+
     ffmpeg.stderr.on("data", (chunk) => {
       stderrData += chunk.toString();
     });
 
     ffmpeg.on("close", (code) => {
+      clearTimeout(timeout);
+      if (res.headersSent) {
+        cleanup();
+        return;
+      }
+
       if (code !== 0) {
         console.error("FFmpeg conversion error:", stderrData);
         cleanup();
         return res.status(500).json({ error: "Video conversion to MP4 failed.", details: stderrData.slice(-400) });
       }
+
+      try {
+        const outStats = fs.statSync(outputPath);
+        console.log(`MP4 conversion complete! Output size: ${(outStats.size / 1024 / 1024).toFixed(2)} MB`);
+      } catch (_) {}
 
       res.setHeader("Content-Type", "video/mp4");
       res.setHeader("Content-Disposition", 'attachment; filename="legitafrica-commercial-4x5.mp4"');
@@ -348,9 +381,12 @@ app.post("/api/convert-to-mp4", (req, res) => {
     });
 
     ffmpeg.on("error", (err) => {
+      clearTimeout(timeout);
       console.error("Failed to spawn ffmpeg:", err);
       cleanup();
-      res.status(500).json({ error: "FFmpeg process error." });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "FFmpeg process error." });
+      }
     });
   });
 });

@@ -92,6 +92,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const [exportedMp4Url, setExportedMp4Url] = useState<string | null>(null);
   const [exportedMp4Blob, setExportedMp4Blob] = useState<Blob | null>(null);
   const [isConvertingToMp4, setIsConvertingToMp4] = useState(false);
+  const [conversionElapsed, setConversionElapsed] = useState(0);
   const [mp4ConversionError, setMp4ConversionError] = useState<string | null>(null);
   const [showExportModal, setShowExportModal] = useState(false);
   const activeRecorderRef = useRef<MediaRecorder | null>(null);
@@ -1261,10 +1262,21 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
   // Convert WebM canvas capture to social-media-ready MP4 (H.264 / AAC)
   const convertBlobToMp4 = async (webmBlob: Blob): Promise<{ url: string; blob: Blob } | null> => {
+    const controller = new AbortController();
+    const abortTimeout = setTimeout(() => {
+      controller.abort();
+    }, 65000);
+
+    let timerInterval: any = null;
     try {
       setIsConvertingToMp4(true);
+      setConversionElapsed(0);
       setMp4ConversionError(null);
       setRecordingStatusText('Converting to Social Media MP4 (H.264/AAC for Instagram, TikTok, WhatsApp)...');
+
+      timerInterval = setInterval(() => {
+        setConversionElapsed((prev) => prev + 1);
+      }, 1000);
 
       const response = await fetch('/api/convert-to-mp4', {
         method: 'POST',
@@ -1272,7 +1284,11 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           'Content-Type': 'video/webm',
         },
         body: webmBlob,
+        signal: controller.signal,
       });
+
+      clearTimeout(abortTimeout);
+      if (timerInterval) clearInterval(timerInterval);
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
@@ -1285,10 +1301,18 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       setExportedMp4Url(mp4Url);
       return { url: mp4Url, blob: mp4Blob };
     } catch (err: any) {
+      clearTimeout(abortTimeout);
+      if (timerInterval) clearInterval(timerInterval);
       console.error('MP4 conversion error:', err);
-      setMp4ConversionError(err.message || 'Failed to convert to MP4');
+      const isAbort = err.name === 'AbortError';
+      const msg = isAbort
+        ? 'MP4 encoding took longer than expected. You can download the raw WebM file or click Retry MP4 below.'
+        : err.message || 'Failed to convert to MP4';
+      setMp4ConversionError(msg);
       return null;
     } finally {
+      clearTimeout(abortTimeout);
+      if (timerInterval) clearInterval(timerInterval);
       setIsConvertingToMp4(false);
     }
   };
@@ -2103,27 +2127,32 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             {isConvertingToMp4 && (
               <div className="p-3 bg-[#E8A317]/10 border border-[#E8A317] rounded-2xl flex items-center gap-3">
                 <Sparkles className="w-5 h-5 text-[#E8A317] animate-spin shrink-0" />
-                <div className="text-left">
-                  <p className="text-xs font-bold text-[#181614]">Converting to Social Media MP4...</p>
-                  <p className="text-[11px] text-[#6B6256]">
-                    Encoding broadcast-grade H.264 video with AAC audio and faststart flags for instant upload on Instagram, TikTok, and WhatsApp.
+                <div className="text-left flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-[#181614]">Converting to Social Media MP4...</p>
+                    <span className="text-[10px] font-mono font-bold text-[#181614] bg-[#E8A317]/20 px-2 py-0.5 rounded-full">
+                      {conversionElapsed}s
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#6B6256] mt-0.5">
+                    Fast H.264 encode with AAC audio & faststart flags (~10–15s). Universal playback on Instagram, TikTok, and WhatsApp.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Conversion Error Banner (if any) */}
+            {/* Conversion Notice / Retry Banner */}
             {mp4ConversionError && !exportedMp4Url && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-left">
-                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-2.5 text-left">
+                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-red-900">MP4 Conversion Notice</p>
-                  <p className="text-[11px] text-red-700">{mp4ConversionError}</p>
+                  <p className="text-xs font-bold text-[#181614]">MP4 Encoding Notice</p>
+                  <p className="text-[11px] text-[#6B6256]">{mp4ConversionError}</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleManualConvertToMp4}
-                  className="px-2.5 py-1 text-xs font-bold text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] rounded-lg cursor-pointer shrink-0"
+                  className="px-2.5 py-1 text-xs font-bold text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] rounded-lg cursor-pointer shrink-0 shadow-xs"
                 >
                   Retry MP4
                 </button>
@@ -2148,13 +2177,20 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                   )}
                 </a>
               ) : isConvertingToMp4 ? (
-                <button
-                  disabled
-                  className="w-full py-3.5 px-4 rounded-xl bg-[#EAE3D4] text-[#6B6256] font-bold text-sm flex items-center justify-center gap-2 cursor-wait"
-                >
-                  <Sparkles className="w-4 h-4 animate-spin text-[#E8A317]" />
-                  <span>Preparing Social MP4 (H.264)...</span>
-                </button>
+                <div className="space-y-1.5">
+                  <button
+                    disabled
+                    className="w-full py-3.5 px-4 rounded-xl bg-[#EAE3D4] text-[#6B6256] font-bold text-sm flex items-center justify-center gap-2 cursor-wait"
+                  >
+                    <Sparkles className="w-4 h-4 animate-spin text-[#E8A317]" />
+                    <span>Preparing Social MP4 ({conversionElapsed}s elapsed)...</span>
+                  </button>
+                  {exportedVideoUrl && (
+                    <p className="text-[11px] text-center text-[#6B6256]">
+                      Need it now? You can download the raw WebM file below while MP4 finishes.
+                    </p>
+                  )}
+                </div>
               ) : (
                 <button
                   type="button"
