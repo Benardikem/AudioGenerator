@@ -19,6 +19,9 @@ import {
   ShieldCheck,
   Star,
   ExternalLink,
+  X,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 import { soundEngine } from '../utils/audioSynth';
 import {
@@ -38,8 +41,11 @@ interface SocialVideoOverlayProps {
   style: string;
   scenes?: AdvertScene[];
   externalSceneIndex?: number;
+  sceneVersion?: number;
   onSceneChange?: (idx: number) => void;
   onGenerateAudioClick?: () => void;
+  isGeneratingAudio?: boolean;
+  isScriptOutOfSync?: boolean;
 }
 
 export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
@@ -50,11 +56,15 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   style,
   scenes,
   externalSceneIndex,
+  sceneVersion,
   onSceneChange,
   onGenerateAudioClick,
+  isGeneratingAudio = false,
+  isScriptOutOfSync = false,
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pendingPlayRef = useRef(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -70,9 +80,21 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [subtitleStyle, setSubtitleStyle] = useState<'gold_capsule' | 'star_contrast' | 'sand_card'>('gold_capsule');
 
+  // Director's Scene Visual Action Banner on canvas (off by default for clean commercial output)
+  const [showActionOverlay, setShowActionOverlay] = useState(false);
+
   // Video recording / export state
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
+  const [recordingStatusText, setRecordingStatusText] = useState('');
+  const [exportedVideoUrl, setExportedVideoUrl] = useState<string | null>(null);
+  const [exportedVideoBlob, setExportedVideoBlob] = useState<Blob | null>(null);
+  const [exportedMp4Url, setExportedMp4Url] = useState<string | null>(null);
+  const [exportedMp4Blob, setExportedMp4Blob] = useState<Blob | null>(null);
+  const [isConvertingToMp4, setIsConvertingToMp4] = useState(false);
+  const [mp4ConversionError, setMp4ConversionError] = useState<string | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const activeRecorderRef = useRef<MediaRecorder | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Compute timed subtitle cues
@@ -84,26 +106,50 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   // Preload scene imagery
   const preloadedImages = useRef<Map<string, HTMLImageElement>>(new Map());
 
+  // Helper to get or dynamically load scene images (supports local files, data URLs, custom uploads)
+  const getSceneImage = (scene: AdvertScene | undefined, defaultFallback: string) => {
+    const src = scene?.imageSrc || defaultFallback;
+    let img = preloadedImages.current.get(src);
+    if (!img) {
+      img = new Image();
+      img.src = src;
+      img.onload = () => {
+        preloadedImages.current.set(src, img!);
+        if (!isPlaying) {
+          drawSceneToCanvas(currentTimeRef.current);
+        }
+      };
+      preloadedImages.current.set(src, img);
+    }
+    return img;
+  };
+
   useEffect(() => {
     const imagesToPreload = [
+      ...sceneList.map((s) => s.imageSrc).filter(Boolean) as string[],
       '/scenes/scene1.jpg',
       '/scenes/scene2.jpg',
       '/scenes/scene3.jpg',
+      '/scenes/scene3_v2.jpg',
       '/scenes/scene4.jpg',
       '/brand/logo-clean.png',
       '/brand/legitafrica-icon-transparent.png',
     ];
 
     imagesToPreload.forEach((src) => {
-      if (!preloadedImages.current.has(src)) {
+      if (src && !preloadedImages.current.has(src)) {
         const img = new Image();
         img.src = src;
         img.onload = () => {
           preloadedImages.current.set(src, img);
+          if (!isPlaying) {
+            drawSceneToCanvas(currentTimeRef.current);
+          }
         };
+        preloadedImages.current.set(src, img);
       }
     });
-  }, []);
+  }, [sceneList]);
 
   useEffect(() => {
     const calculatedCues = generateSubtitleCues(script, totalDuration || duration || 32);
@@ -162,6 +208,11 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     const handleEnd = () => {
       setIsPlaying(false);
       soundEngine.stopBgmBed();
+      setCurrentTime(0);
+      currentTimeRef.current = 0;
+      if (!isPlayingRef.current) {
+        drawSceneToCanvas(0);
+      }
     };
 
     audio.addEventListener('loadedmetadata', handleLoaded);
@@ -176,15 +227,51 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     };
   }, [audioUrl]);
 
-  // Play / Pause Sync
-  const togglePlayPause = () => {
+  // Keep volume and mute state in direct sync with HTMLAudioElement
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = isMuted ? 0 : voiceVolume;
+      audioRef.current.muted = isMuted;
+    }
+  }, [voiceVolume, isMuted]);
+
+  // When audioUrl changes or arrives, reload audio element and trigger pending playback
+  useEffect(() => {
     const audio = audioRef.current;
     if (audio && audioUrl) {
+      audio.load();
+      if (pendingPlayRef.current) {
+        pendingPlayRef.current = false;
+        audio.play().then(() => {
+          setIsPlaying(true);
+          if (bgmTheme !== 'off') {
+            soundEngine.startBgmBed(bgmTheme, bgmVolume);
+          }
+        }).catch((err) => console.warn('Autoplay error:', err));
+      }
+    }
+  }, [audioUrl, bgmTheme, bgmVolume]);
+
+  // Play / Pause Sync
+  const togglePlayPause = () => {
+    if (!audioUrl) {
+      if (onGenerateAudioClick) {
+        pendingPlayRef.current = true;
+        onGenerateAudioClick();
+      }
+      return;
+    }
+
+    const audio = audioRef.current;
+    if (audio) {
       if (isPlaying) {
         audio.pause();
         setIsPlaying(false);
         soundEngine.stopBgmBed();
       } else {
+        if (audio.muted && !isMuted) {
+          audio.muted = false;
+        }
         audio.play().then(() => {
           setIsPlaying(true);
           if (bgmTheme !== 'off') {
@@ -192,9 +279,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           }
         }).catch((e) => console.error('Audio play error:', e));
       }
-    } else {
-      // Visual preview mode without audio
-      setIsPlaying((prev) => !prev);
     }
   };
 
@@ -262,11 +346,33 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         ctx.drawImage(img, sx, sy, sW, sH, dx, dy, dW, dH);
       };
 
+      // Helper function to wrap text neatly for canvas cards
+      const wrapCanvasText = (text: string, maxWidth: number): string[] => {
+        const words = text.split(' ');
+        const lines: string[] = [];
+        let currentLine = words[0] || '';
+
+        for (let i = 1; i < words.length; i++) {
+          const word = words[i];
+          const width = ctx.measureText(currentLine + ' ' + word).width;
+          if (width < maxWidth) {
+            currentLine += ' ' + word;
+          } else {
+            lines.push(currentLine);
+            currentLine = word;
+          }
+        }
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        return lines;
+      };
+
       // ----------------------------------------------------
       // SCENE 1: Close-up hand holding phone showing debit alert for ₦45,000
       // ----------------------------------------------------
       if (currentSceneIndex === 0) {
-        const img = preloadedImages.current.get('/scenes/scene1.jpg');
+        const img = getSceneImage(sceneList[0], '/scenes/scene1.jpg');
         if (img && img.complete) {
           drawCoverImage(img, 1.05);
         } else {
@@ -339,7 +445,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       // SCENE 2: Smiling young woman trying on well-fitted ankara outfit in tailor's shop
       // ----------------------------------------------------
       else if (currentSceneIndex === 1) {
-        const img = preloadedImages.current.get('/scenes/scene2.jpg');
+        const img = getSceneImage(sceneList[1], '/scenes/scene2.jpg');
         if (img && img.complete) {
           drawCoverImage(img, 1.06, -10);
         } else {
@@ -370,68 +476,75 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENE 3: Frustrated man staring at phone, calls to seller going unanswered
+      // SCENE 3: Frustrated Nigerian man holding smartphone in dimly lit room
+      // Hyper-realistic cinematography: cold blue phone glow, tense shadows, WhatsApp undelivered single tick
       // ----------------------------------------------------
       else if (currentSceneIndex === 2) {
-        const img = preloadedImages.current.get('/scenes/scene3.jpg');
+        const img = getSceneImage(sceneList[2], '/scenes/scene3_v2.jpg');
         if (img && img.complete) {
-          drawCoverImage(img, 1.04);
+          drawCoverImage(img, 1.06);
         } else {
           ctx.fillStyle = BRAND_COLORS.sand;
           ctx.fillRect(0, 0, W, H);
         }
 
-        // Vignette
-        const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.25, W / 2, H / 2, W * 0.7);
-        vig.addColorStop(0, 'rgba(24, 22, 20, 0.2)');
-        vig.addColorStop(1, 'rgba(24, 22, 20, 0.7)');
+        // Cinematic Moody Vignette emphasizing screen glow & shadows
+        const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.25, W / 2, H / 2, W * 0.75);
+        vig.addColorStop(0, 'rgba(24, 22, 20, 0.05)');
+        vig.addColorStop(1, 'rgba(24, 22, 20, 0.65)');
         ctx.fillStyle = vig;
         ctx.fillRect(0, 0, W, H);
 
-        // Unanswered Call Card (Warm grey & Near-black, adhering strictly to no bright red/green)
-        const callCardW = 760;
-        const callCardH = 260;
-        const callCardX = (W - callCardW) / 2;
-        const callCardY = 280;
+        // Sleek, authentic mobile call status pill (top of screen, unobtrusive)
+        const toastW = 720;
+        const toastH = 92;
+        const toastX = (W - toastW) / 2;
+        const toastY = 160;
 
         ctx.save();
         ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = 30;
-        ctx.fillStyle = BRAND_COLORS.cream;
+        ctx.shadowBlur = 25;
+        ctx.shadowOffsetY = 10;
+        ctx.fillStyle = 'rgba(24, 22, 20, 0.9)';
         ctx.beginPath();
-        ctx.roundRect(callCardX, callCardY, callCardW, callCardH, 28);
+        ctx.roundRect(toastX, toastY, toastW, toastH, 26);
         ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.borders;
-        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = 'rgba(232, 163, 23, 0.4)';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
-        ctx.restore();
 
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 36px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Seller (Cloth Vendor)', callCardX + 50, callCardY + 90);
-
-        ctx.fillStyle = BRAND_COLORS.warmGrey;
-        ctx.font = '500 28px sans-serif';
-        ctx.fillText('Outgoing call... No response (3 missed)', callCardX + 50, callCardY + 150);
-        ctx.fillText('Paid ₦45,000 · Calls not connecting', callCardX + 50, callCardY + 200);
-
-        // Icon indicator
-        ctx.fillStyle = BRAND_COLORS.sand;
+        // Phone call red indicator dot
+        ctx.fillStyle = '#E53E3E';
         ctx.beginPath();
-        ctx.arc(callCardX + callCardW - 75, callCardY + 120, 36, 0, Math.PI * 2);
+        ctx.arc(toastX + 44, toastY + 46, 12, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = '28px sans-serif';
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Seller (Vendor)', toastX + 75, toastY + 42);
+
+        ctx.fillStyle = '#EAE3D4';
+        ctx.font = '500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('Line Busy · Call Ended · Single grey tick on WhatsApp', toastX + 75, toastY + 72);
+
+        // Call ended cross
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.beginPath();
+        ctx.arc(toastX + toastW - 44, toastY + 46, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#EAE3D4';
+        ctx.font = 'bold 20px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('✕', callCardX + callCardW - 75, callCardY + 130);
+        ctx.fillText('✕', toastX + toastW - 44, toastY + 53);
+        ctx.restore();
       }
 
       // ----------------------------------------------------
       // SCENE 4: Another person on WhatsApp typing "Is it still available?", about to pay
       // ----------------------------------------------------
       else if (currentSceneIndex === 3) {
-        const img = preloadedImages.current.get('/scenes/scene4.jpg');
+        const img = getSceneImage(sceneList[3], '/scenes/scene4.jpg');
         if (img && img.complete) {
           drawCoverImage(img, 1.05);
         } else {
@@ -489,54 +602,95 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENE 5: LegitAfrica logo appears on clean cream background
+      // SCENE 5: Official LegitAfrica Brand Asset Layout (4:5 1080x1350)
+      // "Abeg, tell that person wetin you know. For Legit Africa."
       // ----------------------------------------------------
       else if (currentSceneIndex === 4) {
         // Strict Brand Main Background: Cream #FBF8F1
         ctx.fillStyle = BRAND_COLORS.cream;
         ctx.fillRect(0, 0, W, H);
 
-        // Subtle sand circular aura
-        const aura = ctx.createRadialGradient(W / 2, H * 0.45, 80, W / 2, H * 0.45, W * 0.5);
-        aura.addColorStop(0, BRAND_COLORS.sand);
-        aura.addColorStop(1, BRAND_COLORS.cream);
-        ctx.fillStyle = aura;
-        ctx.beginPath();
-        ctx.arc(W / 2, H * 0.45, W * 0.48, 0, Math.PI * 2);
-        ctx.fill();
+        // Check if user uploaded a custom image for Scene 5
+        const isCustomImg =
+          activeScene.imageSrc &&
+          activeScene.imageSrc !== '/brand/logo-clean.png' &&
+          activeScene.imageSrc !== '/brand/legitafrica-icon-transparent.png';
 
-        // Draw Official Wordmark Logo
-        const wordmark = preloadedImages.current.get('/brand/logo-clean.png');
-        if (wordmark && wordmark.complete) {
-          const wmW = 820;
-          const wmH = (wmW / wordmark.naturalWidth) * wordmark.naturalHeight;
-          ctx.drawImage(wordmark, (W - wmW) / 2, H * 0.38 - wmH / 2, wmW, wmH);
-        } else {
-          // Clean typography fallback
-          ctx.fillStyle = BRAND_COLORS.nearBlack;
-          ctx.font = '900 72px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('LEGIT AFRICA', W / 2, H * 0.42);
+        if (isCustomImg) {
+          const custom = getSceneImage(activeScene, '/brand/logo-clean.png');
+          if (custom && custom.complete && custom.naturalWidth > 0) {
+            drawCoverImage(custom, 1.0);
+            return;
+          }
         }
 
-        // Subtitle line
-        ctx.fillStyle = BRAND_COLORS.warmGrey;
-        ctx.font = '600 32px sans-serif';
+        // Elegant warm ambient glow behind central lockup
+        const aura = ctx.createRadialGradient(W / 2, 540, 50, W / 2, 540, 480);
+        aura.addColorStop(0, 'rgba(232, 163, 23, 0.10)');
+        aura.addColorStop(0.6, 'rgba(244, 238, 226, 0.3)');
+        aura.addColorStop(1, 'rgba(251, 248, 241, 0)');
+        ctx.fillStyle = aura;
+        ctx.fillRect(0, 0, W, H);
+
+        // 1. Large Central Branding Lockup: Gold Kudu Antelope Head Silhouette
+        const kudu = preloadedImages.current.get('/brand/legitafrica-icon-transparent.png');
+        if (kudu && kudu.complete && kudu.naturalWidth > 0) {
+          const kuduW = 200;
+          const kuduH = (kuduW / kudu.naturalWidth) * kudu.naturalHeight;
+          ctx.drawImage(kudu, (W - kuduW) / 2, 280, kuduW, kuduH);
+        }
+
+        // 2. Bold Typography: "LEGIT AFRICA" Wordmark
+        const wordmark = preloadedImages.current.get('/brand/logo-clean.png');
+        if (wordmark && wordmark.complete && wordmark.naturalWidth > 0) {
+          const wmW = 740;
+          const wmH = (wmW / wordmark.naturalWidth) * wordmark.naturalHeight;
+          ctx.drawImage(wordmark, (W - wmW) / 2, 495, wmW, wmH);
+        } else {
+          ctx.fillStyle = BRAND_COLORS.nearBlack;
+          ctx.font = '900 68px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('LEGITAFRICA', W / 2, 560);
+        }
+
+        // 3. Sub-Headline Tagline: "REVIEWS YOU CAN TRUST"
+        ctx.fillStyle = BRAND_COLORS.gold;
+        ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Tell them wetin you know.', W / 2, H * 0.58);
+        ctx.fillText('R E V I E W S   Y O U   C A N   T R U S T', W / 2, 670);
 
-        // Free platform badge
-        ctx.fillStyle = BRAND_COLORS.sand;
-        ctx.beginPath();
-        ctx.roundRect((W - 360) / 2, H * 0.64, 360, 60, 30);
-        ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.gold;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
+        // 4. Exact Slogan Text: "Tell them wetin you know." in dark charcoal gray sans-serif
         ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 26px sans-serif';
-        ctx.fillText('100% Free For Everyone', W / 2, H * 0.68);
+        ctx.font = '600 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Tell them wetin you know.', W / 2, 755);
+
+        // 5. [NEW BUTTON & TEXT LOOK]: Highly professional modern pill-shaped button
+        // Solidly filled with vibrant, premium gold color (strictly NO outline)
+        const btnW = 540;
+        const btnH = 82;
+        const btnX = (W - btnW) / 2;
+        const btnY = 825;
+        const btnRadius = 41;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(232, 163, 23, 0.45)';
+        ctx.shadowBlur = 28;
+        ctx.shadowOffsetY = 10;
+        ctx.fillStyle = '#E8A317'; // Solid vibrant premium gold
+        ctx.beginPath();
+        ctx.roundRect(btnX, btnY, btnW, btnH, btnRadius);
+        ctx.fill(); // Solid fill ONLY — no stroke or outline
+        ctx.restore();
+
+        // Button Text: "100% Free For Everyone" in crisp clean white bold geometric capital letters with elegant wide letter-spacing
+        ctx.save();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('100% FREE FOR EVERYONE', W / 2, btnY + btnH / 2);
+        ctx.restore();
       }
 
       // ----------------------------------------------------
@@ -624,81 +778,186 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENE 7: Review sitting on the business page with a gold tick beside it
+      // SCENE 7: Official Brand Asset Layout (4:5 1080x1350)
+      // "No business fit pay us to comot honest review."
       // ----------------------------------------------------
       else if (currentSceneIndex === 6) {
-        // Main Cream Background
+        // Retain the off-white/cream background color (#FBF8F1)
         ctx.fillStyle = BRAND_COLORS.cream;
         ctx.fillRect(0, 0, W, H);
 
-        const cardW = 860;
-        const cardH = 680;
+        // Check if user provided an uploaded custom image for Scene 7
+        const isCustomImg =
+          activeScene.imageSrc &&
+          activeScene.imageSrc !== '/brand/logo-clean.png' &&
+          activeScene.imageSrc !== '/brand/legitafrica-icon-transparent.png';
+
+        if (isCustomImg) {
+          const custom = getSceneImage(activeScene, '/brand/legitafrica-icon-transparent.png');
+          if (custom && custom.complete && custom.naturalWidth > 0) {
+            drawCoverImage(custom, 1.0);
+            return;
+          }
+        }
+
+        // Subtle ambient radial glow behind central card
+        const glow = ctx.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, 500);
+        glow.addColorStop(0, 'rgba(232, 163, 23, 0.08)');
+        glow.addColorStop(0.6, 'rgba(244, 238, 226, 0.35)');
+        glow.addColorStop(1, 'rgba(251, 248, 241, 0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        // [CENTRAL CARD INTERFACE]:
+        // Centered in the middle of the frame, prominent, crisp white rounded rectangle card
+        // with a soft, clean drop shadow separating it from the cream background.
+        // Generous internal padding so text elements do not touch or spill over the edges.
+        const cardW = 900;
+        const cardH = 800;
         const cardX = (W - cardW) / 2;
-        const cardY = 220;
+        const cardY = (H - cardH) / 2; // 275 - perfectly centered in 1350h
 
         ctx.save();
-        ctx.shadowColor = 'rgba(24, 22, 20, 0.18)';
-        ctx.shadowBlur = 35;
-        ctx.fillStyle = BRAND_COLORS.white;
+        ctx.shadowColor = 'rgba(24, 22, 20, 0.12)';
+        ctx.shadowBlur = 40;
+        ctx.shadowOffsetY = 16;
+        ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
         ctx.roundRect(cardX, cardY, cardW, cardH, 32);
         ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.borders;
-        ctx.lineWidth = 3;
-        ctx.stroke();
         ctx.restore();
 
-        // Gold Tick Badge Header
-        ctx.fillStyle = BRAND_COLORS.sand;
+        // Subtle crisp hairline card border
+        ctx.strokeStyle = '#EAE3D4';
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.roundRect(cardX + 50, cardY + 50, cardW - 100, 100, 20);
-        ctx.fill();
-
-        // Gold Tick Icon
-        ctx.fillStyle = BRAND_COLORS.gold;
-        ctx.beginPath();
-        ctx.arc(cardX + 110, cardY + 100, 30, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = BRAND_COLORS.white;
-        ctx.font = 'bold 34px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('✓', cardX + 110, cardY + 112);
-
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 32px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Verified Honest Review', cardX + 160, cardY + 110);
-
-        // Published Review Text on Business Page
-        ctx.fillStyle = BRAND_COLORS.starGold;
-        ctx.font = '40px sans-serif';
-        ctx.fillText('★ ★ ★ ★ ★', cardX + 60, cardY + 220);
-
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 36px sans-serif';
-        ctx.fillText('"No business fit pay us to comot honest review."', cardX + 60, cardY + 290);
-
-        ctx.fillStyle = BRAND_COLORS.warmGrey;
-        ctx.font = '500 28px sans-serif';
-        ctx.fillText('Your review stays permanently on the business page.', cardX + 60, cardY + 360);
-        ctx.fillText('Protecting other customers across Africa.', cardX + 60, cardY + 410);
-
-        // Core Guarantee Banner in Darker Gold
-        ctx.fillStyle = BRAND_COLORS.cream;
-        ctx.beginPath();
-        ctx.roundRect(cardX + 50, cardY + 470, cardW - 100, 140, 20);
-        ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.gold;
-        ctx.lineWidth = 2;
+        ctx.roundRect(cardX, cardY, cardW, cardH, 32);
         ctx.stroke();
 
-        ctx.fillStyle = BRAND_COLORS.darkerGold;
-        ctx.font = 'bold 30px sans-serif';
-        ctx.fillText('100% UNBIASED & FREE', cardX + 90, cardY + 530);
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = '26px sans-serif';
-        ctx.fillText('No sponsored deletions · No fake ratings', cardX + 90, cardY + 575);
+        // Verified Badge Area:
+        // Inside top of white card, wide, light-beige pill banner
+        // Left: solid gold circular checkmark icon, followed by "Verified Honest Review" in bold clean charcoal sans-serif
+        const badgeW = 540;
+        const badgeH = 68;
+        const badgeX = (W - badgeW) / 2;
+        const badgeY = cardY + 48;
+        const badgeRadius = 34;
+
+        ctx.fillStyle = '#F4EEE2'; // Light-beige / sand
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeW, badgeH, badgeRadius);
+        ctx.fill();
+
+        // Solid gold circular checkmark icon
+        const iconRadius = 20;
+        const iconCenterY = badgeY + badgeH / 2;
+        const iconCenterX = badgeX + 38;
+
+        ctx.fillStyle = '#E8A317'; // Solid gold
+        ctx.beginPath();
+        ctx.arc(iconCenterX, iconCenterY, iconRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Checkmark symbol ✓ in white
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('✓', iconCenterX, iconCenterY + 1);
+
+        // "Verified Honest Review" in bold clean charcoal sans-serif
+        ctx.fillStyle = '#181614';
+        ctx.font = 'bold 25px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Verified Honest Review', iconCenterX + 32, iconCenterY);
+
+        // Star Ratings:
+        // Directly below badge banner, horizontal row of five perfectly aligned, sharp gold five-point stars
+        const starsY = badgeY + badgeH + 42;
+        ctx.fillStyle = '#F5B301'; // Vibrant star gold
+        ctx.font = '38px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('★ ★ ★ ★ ★', W / 2, starsY);
+
+        // [FIXED INTERIOR TEXT & OVERFLOW PREVENTION]:
+        // Main Headline Layout: Prominent quote: "No business fit pay us to comot honest review."
+        // Highly modern, medium-bold charcoal geometric sans-serif font.
+        // Scaled down to fit cleanly inside card width, automatically wrapped perfectly into two clean balanced lines
+        // with generous breathing room on left and right margins.
+        const rawQuote = (activeScene.voiceLine?.trim() || 'No business fit pay us to comot honest review.').replace(/^["']|["']$/g, '');
+        const quoteWords = rawQuote.split(' ');
+        let headlineLine1 = '';
+        let headlineLine2 = '';
+        if (quoteWords.length <= 4) {
+          headlineLine1 = `"${rawQuote}"`;
+        } else {
+          const splitIdx = Math.ceil(quoteWords.length / 2);
+          headlineLine1 = `"${quoteWords.slice(0, splitIdx).join(' ')}`;
+          headlineLine2 = `${quoteWords.slice(splitIdx).join(' ')}"`;
+        }
+        const headlineY1 = starsY + 54;
+        const headlineY2 = headlineLine2 ? headlineY1 + 46 : headlineY1;
+
+        ctx.fillStyle = '#181614';
+        ctx.font = '700 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(headlineLine1, W / 2, headlineY1);
+        if (headlineLine2) {
+          ctx.fillText(headlineLine2, W / 2, headlineY2);
+        }
+
+        // Subtext Paragraphs:
+        // Safely underneath wrapped headline in clean, smaller regular-weight gray sans-serif font:
+        // "Your review stays permanently on the business page."
+        // "Protecting other customers across Africa."
+        const subtextY1 = headlineY2 + 50;
+        const subtextY2 = subtextY1 + 32;
+
+        ctx.fillStyle = '#6B6256';
+        ctx.font = '500 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Your review stays permanently on the business page.', W / 2, subtextY1);
+        ctx.fillText('Protecting other customers across Africa.', W / 2, subtextY2);
+
+        // [SOLID GOLD BUTTON LOOK]:
+        // Near the bottom inside white card, professional modern pill-shaped call-to-action box
+        // Solidly filled with vibrant premium gold color (NO outline).
+        // First line: "100% UNBIASED & FREE"
+        // Subtext: "No sponsored deletions · No fake ratings"
+        // Crisp clean white capital letters with elegant wider letter-spacing
+        const btnW = 740;
+        const btnH = 96;
+        const btnX = (W - btnW) / 2;
+        const btnY = cardY + cardH - 52 - btnH; // 927
+        const btnRadius = 48;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(232, 163, 23, 0.42)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 8;
+        ctx.fillStyle = '#E8A317'; // Solid vibrant premium gold — strictly no outline
+        ctx.beginPath();
+        ctx.roundRect(btnX, btnY, btnW, btnH, btnRadius);
+        ctx.fill();
+        ctx.restore();
+
+        // CTA Line 1: "100% UNBIASED & FREE"
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('100% UNBIASED & FREE', W / 2, btnY + 36);
+
+        // CTA Line 2: "No sponsored deletions · No fake ratings"
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.font = '600 18px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('No sponsored deletions  ·  No fake ratings', W / 2, btnY + 68);
       }
 
       // ----------------------------------------------------
@@ -853,31 +1112,73 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
       // ----------------------------------------------------
       // TOP BRAND WATERMARK (Official Kudu + Name)
+      // Adjusted with padding-left: -20px (X: 40) and high-contrast protective pill so the icon is never hidden
       // ----------------------------------------------------
       ctx.save();
       const kudu = preloadedImages.current.get('/brand/legitafrica-icon-transparent.png');
-      if (kudu && kudu.complete) {
-        ctx.drawImage(kudu, 60, 60, 64, 64);
-      }
-      ctx.fillStyle = BRAND_COLORS.nearBlack;
-      ctx.font = 'bold 28px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText('LegitAfrica', 140, 102);
+      const brandX = 40; // 60 - 20px padding adjustment
+      const brandY = 56;
+      const pillW = 260;
+      const pillH = 68;
 
-      // 4:5 indicator badge
-      ctx.fillStyle = 'rgba(244, 238, 226, 0.9)';
+      // Protective high-contrast brand capsule pill ensuring icon and text stay crisp over all photo/dark backgrounds
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.22)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = 'rgba(251, 248, 241, 0.95)';
       ctx.beginPath();
-      ctx.roundRect(W - 240, 60, 180, 52, 16);
+      ctx.roundRect(brandX, brandY, pillW, pillH, 20);
       ctx.fill();
-      ctx.strokeStyle = BRAND_COLORS.borders;
+      ctx.strokeStyle = 'rgba(232, 163, 23, 0.5)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
+      // Reset shadow for crisp icon & text rendering
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      if (kudu && kudu.complete) {
+        ctx.drawImage(kudu, brandX + 10, brandY + 6, 56, 56);
+      }
       ctx.fillStyle = BRAND_COLORS.nearBlack;
-      ctx.font = 'bold 22px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('4:5 · 1080×1350', W - 150, 94);
+      ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('LegitAfrica', brandX + 78, brandY + 44);
       ctx.restore();
+
+      // ----------------------------------------------------
+      // DIRECTOR'S SCENE VISUAL ACTION BANNER
+      // Displays the active scene's Visual Prompt & Action directly on canvas (preview only, never in recording)
+      // ----------------------------------------------------
+      if (showActionOverlay && !isRecordingVideo) {
+        ctx.save();
+        const actionBannerY = 135;
+        const bannerW = W - 120;
+        const bannerX = 60;
+        const bannerH = 58;
+
+        ctx.fillStyle = 'rgba(24, 22, 20, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(bannerX, actionBannerY, bannerW, bannerH, 16);
+        ctx.fill();
+        ctx.strokeStyle = BRAND_COLORS.gold;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = BRAND_COLORS.gold;
+        ctx.font = 'bold 19px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`SCENE ${sceneIndex + 1} ACTION:`, bannerX + 24, actionBannerY + 36);
+
+        ctx.fillStyle = BRAND_COLORS.cream;
+        ctx.font = '500 19px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        const promptText = activeScene.visualPrompt;
+        const maxLen = 58;
+        const displayPrompt = promptText.length > maxLen ? promptText.slice(0, maxLen - 3) + '...' : promptText;
+        ctx.fillText(displayPrompt, bannerX + 225, actionBannerY + 36);
+        ctx.restore();
+      }
 
       // Bottom Gold Progress Line
       ctx.fillStyle = 'rgba(24, 22, 20, 0.15)';
@@ -885,7 +1186,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       ctx.fillStyle = BRAND_COLORS.gold;
       ctx.fillRect(60, H - 24, (W - 120) * progress, 8);
     },
-    [sceneList, cues, subtitlesEnabled, subtitleStyle]
+    [sceneList, cues, subtitlesEnabled, subtitleStyle, showActionOverlay]
   );
 
   // Render static frame when paused or when time/scene/subtitles change
@@ -895,13 +1196,12 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     }
   }, [isPlaying, currentTime, drawSceneToCanvas]);
 
-  // Handle external jump request safely without trigger loops
+  // Handle external jump request and force-redraw on sceneVersion or scenes updates
   useEffect(() => {
     if (
       typeof externalSceneIndex === 'number' &&
       externalSceneIndex >= 0 &&
-      externalSceneIndex <= 7 &&
-      externalSceneIndex !== lastExternalSceneRef.current
+      externalSceneIndex <= 7
     ) {
       lastExternalSceneRef.current = externalSceneIndex;
       lastNotifiedSceneRef.current = externalSceneIndex;
@@ -915,8 +1215,14 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       if (!isPlayingRef.current) {
         drawSceneToCanvas(targetTime);
       }
+    } else if (!isPlayingRef.current) {
+      drawSceneToCanvas(currentTimeRef.current);
     }
-  }, [externalSceneIndex, totalDuration, audioUrl, drawSceneToCanvas]);
+    // Invalidate previously rendered video file so user is aware a new export can be generated
+    if (sceneVersion && sceneVersion > 0) {
+      setExportedVideoUrl(null);
+    }
+  }, [externalSceneIndex, sceneVersion, scenes, totalDuration, audioUrl, drawSceneToCanvas]);
 
   // Smooth animation loop when playing (both audio and visual-only preview)
   useEffect(() => {
@@ -953,8 +1259,71 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     return () => cancelAnimationFrame(animId);
   }, [isPlaying, audioUrl, drawSceneToCanvas]);
 
-  // Video Export / Recording (1080x1350 30fps with audio)
+  // Convert WebM canvas capture to social-media-ready MP4 (H.264 / AAC)
+  const convertBlobToMp4 = async (webmBlob: Blob): Promise<{ url: string; blob: Blob } | null> => {
+    try {
+      setIsConvertingToMp4(true);
+      setMp4ConversionError(null);
+      setRecordingStatusText('Converting to Social Media MP4 (H.264/AAC for Instagram, TikTok, WhatsApp)...');
+
+      const response = await fetch('/api/convert-to-mp4', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'video/webm',
+        },
+        body: webmBlob,
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Server video conversion failed');
+      }
+
+      const mp4Blob = await response.blob();
+      const mp4Url = URL.createObjectURL(mp4Blob);
+      setExportedMp4Blob(mp4Blob);
+      setExportedMp4Url(mp4Url);
+      return { url: mp4Url, blob: mp4Blob };
+    } catch (err: any) {
+      console.error('MP4 conversion error:', err);
+      setMp4ConversionError(err.message || 'Failed to convert to MP4');
+      return null;
+    } finally {
+      setIsConvertingToMp4(false);
+    }
+  };
+
+  const handleManualConvertToMp4 = () => {
+    if (exportedVideoBlob && !isConvertingToMp4) {
+      convertBlobToMp4(exportedVideoBlob).then((res) => {
+        if (res) {
+          try {
+            const a = document.createElement('a');
+            a.href = res.url;
+            a.download = 'legit-africa-commercial-4x5.mp4';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              try {
+                document.body.removeChild(a);
+              } catch (_) {}
+            }, 3000);
+          } catch (_) {}
+        }
+      });
+    }
+  };
+
+  // Video Export / Recording (1080x1350 30fps with synchronized audio)
   const handleExportVideo = async () => {
+    if (!audioUrl) {
+      if (onGenerateAudioClick) {
+        pendingPlayRef.current = true;
+        onGenerateAudioClick();
+      }
+      return;
+    }
+
     const canvas = canvasRef.current;
     const audio = audioRef.current;
     if (!canvas || !audio) return;
@@ -962,66 +1331,172 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     try {
       setIsRecordingVideo(true);
       setRecordingProgress(0);
+      setRecordingStatusText('Initializing 1080×1350 canvas & audio stream...');
 
-      // Stop any active play
+      // Stop any active BGM bed to prevent double synth audio
+      soundEngine.stopBgmBed();
+
+      // Pause audio and reset to start
       audio.pause();
       audio.currentTime = 0;
       setCurrentTime(0);
 
-      // Capture stream from canvas at 30fps
+      // Save previous speaker mute & volume state, then completely silence physical speakers during recording to eliminate double echo
+      const prevMuted = audio.muted;
+      const prevVolume = audio.volume;
+      audio.muted = true;
+      audio.volume = 0;
+
+      // Capture 30fps stream from high-res canvas
       const stream = canvas.captureStream(30);
 
-      // Route audio into stream if supported
+      // Route audio cleanly into stream using Web Audio destination (STRICTLY into stream, NOT to physical speakers!)
+      let audioBufferSource: AudioBufferSourceNode | null = null;
+      let exportAudioCtx: AudioContext | null = null;
       try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const source = audioCtx.createMediaElementSource(audio);
-        const dest = audioCtx.createMediaStreamDestination();
-        source.connect(dest);
-        source.connect(audioCtx.destination);
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+        exportAudioCtx = new AudioCtxClass();
+        if (exportAudioCtx.state === 'suspended') {
+          await exportAudioCtx.resume();
+        }
+
+        const resp = await fetch(audioUrl);
+        const arrayBuf = await resp.arrayBuffer();
+        const decodedBuffer = await exportAudioCtx.decodeAudioData(arrayBuf);
+
+        const dest = exportAudioCtx.createMediaStreamDestination();
+        audioBufferSource = exportAudioCtx.createBufferSource();
+        audioBufferSource.buffer = decodedBuffer;
+        // Connect ONLY to destination stream (NOT exportAudioCtx.destination) -> prevents echo!
+        audioBufferSource.connect(dest);
+
         dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
       } catch (e) {
-        console.warn('Audio capture routing warning:', e);
+        console.warn('Audio capture routing note:', e);
       }
 
-      const recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: 6000000,
-      });
+      let mimeType = 'video/webm;codecs=vp9,opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+          ? 'video/webm;codecs=vp8,opus'
+          : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : '';
+      }
+
+      const recorder = new MediaRecorder(
+        stream,
+        mimeType ? { mimeType, videoBitsPerSecond: 6000000 } : undefined
+      );
+      activeRecorderRef.current = recorder;
 
       const chunks: Blob[] = [];
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
+        if (e.data && e.data.size > 0) chunks.push(e.data);
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
+        // Restore physical speaker mute state & volume
+        if (audioRef.current) {
+          audioRef.current.muted = prevMuted;
+          audioRef.current.volume = prevVolume;
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        setIsPlaying(false);
+        setCurrentTime(0);
+        currentTimeRef.current = 0;
+        drawSceneToCanvas(0);
+
+        try {
+          audioBufferSource?.stop();
+          exportAudioCtx?.close();
+        } catch (_) {}
+
+        const mime = mimeType || 'video/webm';
+        const blob = new Blob(chunks, { type: mime });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'legit-africa-pidgin-advert-4x5.webm';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+
+        setExportedVideoUrl(url);
+        setExportedVideoBlob(blob);
+        setShowExportModal(true);
         setIsRecordingVideo(false);
+        setRecordingProgress(100);
+
+        // Immediately start conversion to broadcast-grade Social Media MP4 (H.264 / AAC)
+        setRecordingStatusText('Converting to Social Media MP4 (H.264/AAC)...');
+        convertBlobToMp4(blob).then((mp4Res) => {
+          if (mp4Res) {
+            setRecordingStatusText('Social Media MP4 Ready!');
+            // Attempt direct browser download of MP4
+            try {
+              const a = document.createElement('a');
+              a.href = mp4Res.url;
+              a.download = 'legit-africa-commercial-4x5.mp4';
+              document.body.appendChild(a);
+              a.click();
+              setTimeout(() => {
+                try {
+                  document.body.removeChild(a);
+                } catch (_) {}
+              }, 3000);
+            } catch (downloadErr) {
+              console.warn('Auto-download was restricted by browser iframe, modal download available:', downloadErr);
+            }
+          } else {
+            setRecordingStatusText('WebM ready (MP4 conversion can be retried in modal)');
+          }
+        });
       };
 
-      recorder.start();
+      // Start recorder with 250ms chunks to ensure continuous data capture
+      recorder.start(250);
+      if (audioBufferSource) {
+        audioBufferSource.start(0);
+      }
+
+      // Audio drives internal animation loop silently
       await audio.play();
       setIsPlaying(true);
 
+      const targetDuration = totalDuration || 32;
+      let highestProgress = 0;
+      let hasCompleted = false;
+
       const checkInterval = setInterval(() => {
-        if (audio.ended || audio.currentTime >= (totalDuration || 32)) {
-          clearInterval(checkInterval);
-          recorder.stop();
-          setIsPlaying(false);
-        } else {
-          setRecordingProgress(Math.round((audio.currentTime / (totalDuration || 32)) * 100));
+        if (hasCompleted) return;
+
+        const currentSec = audio.currentTime;
+        const pct = Math.min(99, Math.round((currentSec / targetDuration) * 100));
+        if (pct > highestProgress) {
+          highestProgress = pct;
+          setRecordingProgress(highestProgress);
+          setRecordingStatusText(`Recording 4:5 video: ${highestProgress}% (1080×1350)`);
         }
-      }, 300);
+
+        if (audio.ended || currentSec >= targetDuration - 0.25) {
+          hasCompleted = true;
+          clearInterval(checkInterval);
+          setRecordingProgress(100);
+          setRecordingStatusText('Finalizing video container & audio tracks...');
+
+          try {
+            if (recorder.state === 'recording') {
+              recorder.requestData();
+              recorder.stop();
+            }
+          } catch (stopErr) {
+            console.error('Error stopping recorder:', stopErr);
+            setIsRecordingVideo(false);
+          }
+        }
+      }, 200);
     } catch (err) {
       console.error('Video recording failed:', err);
       setIsRecordingVideo(false);
+      if (audioRef.current) {
+        audioRef.current.muted = isMuted;
+      }
     }
   };
 
@@ -1067,6 +1542,19 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
         {/* Action Downloads */}
         <div className="flex flex-wrap items-center gap-2">
+          {(exportedMp4Url || exportedVideoUrl) && (
+            <button
+              id="view-exported-video-btn"
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-[#181614] bg-[#A8D5BA] hover:bg-[#96C7A8] rounded-xl transition-all cursor-pointer shadow-xs"
+              title="View and download your exported social video"
+            >
+              <Check className="w-3.5 h-3.5 text-[#181614]" />
+              {exportedMp4Url ? 'Social MP4 Ready' : 'Video Ready (.webm)'}
+            </button>
+          )}
+
           <button
             id="download-srt-btn"
             type="button"
@@ -1092,23 +1580,64 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             id="export-4x5-video-btn"
             type="button"
             onClick={handleExportVideo}
-            disabled={isRecordingVideo}
+            disabled={isRecordingVideo || isConvertingToMp4}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#181614] hover:bg-black rounded-xl transition-all cursor-pointer shadow-xs disabled:opacity-50"
+            title="Record 1080x1350 canvas and convert to social-media-ready H.264 MP4"
           >
             {isRecordingVideo ? (
               <>
                 <Sparkles className="w-3.5 h-3.5 animate-spin text-[#E8A317]" />
                 Recording {recordingProgress}%...
               </>
+            ) : isConvertingToMp4 ? (
+              <>
+                <Sparkles className="w-3.5 h-3.5 animate-spin text-[#E8A317]" />
+                Converting MP4...
+              </>
             ) : (
               <>
                 <Film className="w-3.5 h-3.5 text-[#E8A317]" />
-                Export 4:5 Video
+                Export Social Video (.mp4)
               </>
             )}
           </button>
         </div>
       </div>
+
+      {/* Script Out Of Sync Alert Banner */}
+      {isScriptOutOfSync && (
+        <div className="mx-6 mt-4 p-4 bg-[#FBF8F1] border-2 border-[#E8A317] rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start gap-2.5 max-w-xl">
+            <AlertTriangle className="w-5 h-5 text-[#E8A317] shrink-0 mt-0.5" />
+            <div>
+              <div className="text-xs font-bold text-[#181614]">
+                Storyboard Synced to Script — Audio Take Needs Re-generation
+              </div>
+              <div className="text-[11px] text-[#6B6256] leading-relaxed">
+                Your visual prompt, canvas actions, and subtitles have updated to your latest script. Click below to synthesize the new Nigerian Pidgin voiceover take.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onGenerateAudioClick}
+            disabled={isGeneratingAudio}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+          >
+            {isGeneratingAudio ? (
+              <>
+                <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                Synthesizing Take...
+              </>
+            ) : (
+              <>
+                <Zap className="w-3.5 h-3.5" />
+                Generate New Audio Take
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Main Grid: Left is 4:5 Portrait Frame, Right is 8 Scene Controller */}
       <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -1121,9 +1650,20 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 <Layers className="w-3.5 h-3.5 text-[#E8A317]" />
                 Jump to Scene:
               </span>
-              <span className="text-[11px] font-bold text-[#E8A317]">
-                Scene {currentSceneIndex + 1} of 8
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => drawSceneToCanvas(currentTimeRef.current)}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#181614] bg-[#F4EEE2] hover:bg-[#E8A317] border border-[#EAE3D4] rounded-md transition-all cursor-pointer"
+                  title="Click to instantly redraw canvas with latest scene changes"
+                >
+                  <RotateCcw className="w-2.5 h-2.5 text-[#181614]" />
+                  <span>Redraw</span>
+                </button>
+                <span className="text-[11px] font-bold text-[#E8A317]">
+                  Scene {currentSceneIndex + 1} of 8
+                </span>
+              </div>
             </div>
             <div className="grid grid-cols-8 gap-1">
               {[0, 1, 2, 3, 4, 5, 6, 7].map((sIdx) => {
@@ -1171,18 +1711,84 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               className="w-full h-full object-cover"
             />
 
-            {/* Play/Pause Watermark Overlay when paused */}
-            {!isPlaying && (
+            {/* Overlays: Recording state, Generating state, No-Audio call-to-action, or Standard Play */}
+            {isRecordingVideo ? (
+              <div className="absolute inset-0 bg-[#181614]/85 z-30 flex flex-col items-center justify-center p-6 text-center">
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold mb-4 shadow-md">
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  REC 1080×1350 (4:5)
+                </div>
+
+                <p className="text-sm font-bold text-white mb-1">Exporting Commercial Video</p>
+                <p className="text-xs text-[#EAE3D4] mb-3">{recordingStatusText || 'Packaging 8 Scenes with Voiceover'}</p>
+
+                {/* Progress bar */}
+                <div className="w-full max-w-[220px] bg-white/20 rounded-full h-3 overflow-hidden mb-1.5">
+                  <div
+                    className="bg-[#E8A317] h-full transition-all duration-200 rounded-full"
+                    style={{ width: `${recordingProgress}%` }}
+                  />
+                </div>
+                <span className="font-mono text-xs font-bold text-[#E8A317]">{recordingProgress}%</span>
+                <p className="text-[10px] text-[#A89F91] mt-2.5">Speakers muted for clean, silent recording</p>
+              </div>
+            ) : isGeneratingAudio ? (
+              <div className="absolute inset-0 bg-[#181614]/75 z-20 flex flex-col items-center justify-center p-4 text-center">
+                <div className="w-14 h-14 rounded-full bg-[#E8A317] text-[#181614] flex items-center justify-center shadow-xl mb-3">
+                  <Sparkles className="w-7 h-7 animate-spin text-[#181614]" />
+                </div>
+                <p className="text-sm font-bold text-white mb-1">Generating Voiceover Audio...</p>
+                <p className="text-xs text-[#EAE3D4]">Gemini 3.1 Flash TTS · Nigerian Pidgin Baritone</p>
+              </div>
+            ) : !audioUrl && !isPlaying ? (
+              <div className="absolute inset-0 bg-[#181614]/65 z-20 flex flex-col items-center justify-center p-4 text-center">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pendingPlayRef.current = true;
+                    onGenerateAudioClick?.();
+                  }}
+                  className="px-5 py-3 rounded-2xl bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] font-bold text-sm shadow-xl flex items-center gap-2 transform hover:scale-105 transition-all cursor-pointer"
+                >
+                  <Play className="w-5 h-5 fill-[#181614]" />
+                  <span>Generate & Play Voiceover</span>
+                </button>
+                <p className="text-xs text-[#EAE3D4] mt-2.5 font-medium">Click to synthesize authentic Pidgin Baritone audio</p>
+              </div>
+            ) : !isPlaying ? (
               <div className="absolute inset-0 bg-[#181614]/30 z-20 flex items-center justify-center pointer-events-none transition-opacity">
                 <div className="w-14 h-14 rounded-full bg-[#FBF8F1] text-[#181614] flex items-center justify-center shadow-xl transform group-hover:scale-110 transition-transform border border-[#E8A317]">
                   <Play className="w-7 h-7 ml-1 fill-[#181614]" />
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
-          {/* Transport Bar Controls */}
-          <div className="w-full max-w-[360px] mt-4 space-y-2">
+          {/* Active Scene Visual Action Card */}
+          <div className="w-full max-w-[360px] bg-[#FBF8F1] border border-[#EAE3D4] rounded-2xl p-3 my-2.5 shadow-xs text-left">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="font-bold text-[#181614] flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-[#E8A317]" />
+                Scene {currentSceneIndex + 1} Visual Action & Prompt
+              </span>
+              {activeScene.visualPrompt !== ADVERT_SCENES[currentSceneIndex]?.visualPrompt && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8A317] text-[#181614]">
+                  Custom Action
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-[#181614] font-medium leading-relaxed">
+              {activeScene.visualPrompt}
+            </p>
+            <div className="mt-2 pt-2 border-t border-[#EAE3D4] flex items-center justify-between text-[11px] text-[#6B6256]">
+              <span className="truncate italic max-w-[230px]">"{activeScene.voiceLine}"</span>
+              <span className="font-mono shrink-0 ml-2">{currentSceneIndex * 4}s–{(currentSceneIndex + 1) * 4}s</span>
+            </div>
+          </div>
+
+          {/* Transport Bar & Comprehensive Audio Controls */}
+          <div className="w-full max-w-[360px] space-y-2.5">
             {/* Scrubber Slider */}
             <input
               type="range"
@@ -1194,14 +1800,23 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               className="w-full h-1.5 bg-[#EAE3D4] rounded-lg appearance-none cursor-pointer accent-[#E8A317]"
             />
 
+            {/* Primary Controls Row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={togglePlayPause}
-                  className="w-8 h-8 rounded-lg bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] flex items-center justify-center transition-all cursor-pointer font-bold"
+                  disabled={isGeneratingAudio}
+                  className="w-8 h-8 rounded-lg bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] flex items-center justify-center transition-all cursor-pointer font-bold disabled:opacity-50"
+                  title={isPlaying ? 'Pause' : 'Play'}
                 >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                  {isGeneratingAudio ? (
+                    <Sparkles className="w-4 h-4 animate-spin" />
+                  ) : isPlaying ? (
+                    <Pause className="w-4 h-4" />
+                  ) : (
+                    <Play className="w-4 h-4 ml-0.5" />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -1211,21 +1826,109 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
+
+                {/* Volume & Mute */}
+                <div className="flex items-center gap-1.5 ml-1 bg-[#F4EEE2] px-2 py-1 rounded-lg border border-[#EAE3D4]">
+                  <button
+                    type="button"
+                    onClick={() => setIsMuted(!isMuted)}
+                    className="text-[#181614] hover:text-[#C6860C] cursor-pointer"
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted || voiceVolume === 0 ? (
+                      <VolumeX className="w-3.5 h-3.5 text-red-500" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5 text-[#181614]" />
+                    )}
+                  </button>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : voiceVolume}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setVoiceVolume(v);
+                      if (isMuted && v > 0) setIsMuted(false);
+                    }}
+                    className="w-14 h-1 bg-[#EAE3D4] rounded-lg appearance-none cursor-pointer accent-[#E8A317]"
+                    title={`Voice volume: ${Math.round((isMuted ? 0 : voiceVolume) * 100)}%`}
+                  />
+                </div>
               </div>
 
-              {/* Subtitles Toggle & Style */}
-              <div className="flex items-center gap-1.5 text-xs text-[#6B6256]">
+              <div className="flex items-center gap-1.5">
+                {/* Director Action HUD Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowActionOverlay(!showActionOverlay)}
+                  className={`px-2 py-1 rounded-lg font-semibold text-[11px] transition-all cursor-pointer border ${
+                    showActionOverlay
+                      ? 'bg-[#181614] text-white border-[#181614]'
+                      : 'bg-[#F4EEE2] text-[#6B6256] border-[#EAE3D4]'
+                  }`}
+                  title="Toggle Director's Visual Action HUD on video preview"
+                >
+                  Action HUD: {showActionOverlay ? 'ON' : 'OFF'}
+                </button>
+
+                {/* Subtitles Toggle */}
                 <button
                   type="button"
                   onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
-                  className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-all cursor-pointer border ${
+                  className={`px-2 py-1 rounded-lg font-semibold text-[11px] transition-all cursor-pointer border ${
                     subtitlesEnabled
                       ? 'bg-[#181614] text-white border-[#181614]'
                       : 'bg-[#F4EEE2] text-[#6B6256] border-[#EAE3D4]'
                   }`}
                 >
-                  Burned Captions: {subtitlesEnabled ? 'ON' : 'OFF'}
+                  Captions: {subtitlesEnabled ? 'ON' : 'OFF'}
                 </button>
+              </div>
+            </div>
+
+            {/* Audio Status & Bed Selector */}
+            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#EAE3D4]/80">
+              <div className="flex items-center gap-1.5">
+                {isGeneratingAudio ? (
+                  <span className="flex items-center gap-1 text-[#C6860C] font-semibold animate-pulse">
+                    <Sparkles className="w-3 h-3 animate-spin" />
+                    Generating Baritone Audio...
+                  </span>
+                ) : audioUrl ? (
+                  <span className="flex items-center gap-1 text-[#2E7D32] font-semibold">
+                    <Check className="w-3 h-3" />
+                    Pidgin Baritone Synced
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      pendingPlayRef.current = true;
+                      onGenerateAudioClick?.();
+                    }}
+                    className="text-[#C6860C] font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Generate Audio
+                  </button>
+                )}
+              </div>
+
+              {/* Background Music Theme */}
+              <div className="flex items-center gap-1.5 text-[#6B6256]">
+                <Music className="w-3 h-3 text-[#E8A317]" />
+                <span className="text-[10px] uppercase font-bold text-[#6B6256]">BGM:</span>
+                <select
+                  value={bgmTheme}
+                  onChange={(e) => setBgmTheme(e.target.value as any)}
+                  className="bg-[#F4EEE2] border border-[#EAE3D4] rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#181614] cursor-pointer"
+                >
+                  <option value="ambient">Ambient Bed</option>
+                  <option value="lofi">Lofi Groove</option>
+                  <option value="off">Off</option>
+                </select>
               </div>
             </div>
           </div>
@@ -1250,8 +1953,12 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
           {/* List of 8 Scenes */}
           <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
-            {ADVERT_SCENES.map((scene, idx) => {
+            {sceneList.map((scene, idx) => {
               const isActive = currentSceneIndex === idx;
+              const isCustomized =
+                scene.visualPrompt !== ADVERT_SCENES[idx]?.visualPrompt ||
+                scene.voiceLine !== ADVERT_SCENES[idx]?.voiceLine;
+
               return (
                 <div
                   key={scene.id}
@@ -1276,9 +1983,16 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                   {/* Scene Details */}
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold text-[#181614] truncate">
-                        "{scene.voiceLine}"
-                      </p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-xs font-bold text-[#181614] truncate">
+                          "{scene.voiceLine}"
+                        </p>
+                        {isCustomized && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-[#E8A317] text-[#181614] shrink-0">
+                            Custom Action
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-[#6B6256] font-mono shrink-0">
                         {idx * 4}s–{(idx + 1) * 4}s
                       </span>
@@ -1328,6 +2042,172 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Video Export Completion Modal */}
+      {showExportModal && (exportedVideoUrl || exportedMp4Url) && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-[#FBF8F1] border border-[#EAE3D4] rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#EAE3D4] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[#2E7D32]/10 text-[#2E7D32] flex items-center justify-center">
+                  <Check className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-[#181614]">
+                    {exportedMp4Url ? 'Social Media Video Ready (.mp4)' : 'Commercial Video Exported'}
+                  </h3>
+                  <p className="text-xs text-[#6B6256]">
+                    1080×1350 (4:5 Portrait) • Nigerian Pidgin Baritone Audio
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="w-8 h-8 rounded-full bg-[#F4EEE2] hover:bg-[#EAE3D4] flex items-center justify-center text-[#181614] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Social Media Compatibility Badges */}
+            <div className="flex flex-wrap items-center gap-1.5 py-1">
+              <span className="text-[10px] uppercase font-bold text-[#6B6256] mr-1">Upload Ready:</span>
+              {['Instagram Feed & Reels', 'TikTok', 'WhatsApp', 'Facebook', 'LinkedIn', 'YouTube Shorts'].map((net) => (
+                <span
+                  key={net}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#F4EEE2] text-[#181614] border border-[#EAE3D4]"
+                >
+                  <span className="text-[#2E7D32] font-bold">✓</span> {net}
+                </span>
+              ))}
+            </div>
+
+            {/* Video Player Preview */}
+            <div className="relative rounded-2xl overflow-hidden bg-black aspect-4/5 max-h-[300px] mx-auto border border-[#181614]">
+              <video
+                key={exportedMp4Url || exportedVideoUrl || ''}
+                src={exportedMp4Url || exportedVideoUrl || undefined}
+                controls
+                autoPlay
+                loop
+                playsInline
+                className="w-full h-full object-contain"
+              />
+              <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-md bg-black/70 text-white text-[10px] font-mono backdrop-blur-xs">
+                {exportedMp4Url ? 'H.264 / AAC MP4' : 'WebM'}
+              </div>
+            </div>
+
+            {/* Converting Status Indicator */}
+            {isConvertingToMp4 && (
+              <div className="p-3 bg-[#E8A317]/10 border border-[#E8A317] rounded-2xl flex items-center gap-3">
+                <Sparkles className="w-5 h-5 text-[#E8A317] animate-spin shrink-0" />
+                <div className="text-left">
+                  <p className="text-xs font-bold text-[#181614]">Converting to Social Media MP4...</p>
+                  <p className="text-[11px] text-[#6B6256]">
+                    Encoding broadcast-grade H.264 video with AAC audio and faststart flags for instant upload on Instagram, TikTok, and WhatsApp.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Conversion Error Banner (if any) */}
+            {mp4ConversionError && !exportedMp4Url && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-left">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-red-900">MP4 Conversion Notice</p>
+                  <p className="text-[11px] text-red-700">{mp4ConversionError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualConvertToMp4}
+                  className="px-2.5 py-1 text-xs font-bold text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] rounded-lg cursor-pointer shrink-0"
+                >
+                  Retry MP4
+                </button>
+              </div>
+            )}
+
+            {/* Download Actions */}
+            <div className="space-y-2 pt-1">
+              {/* Primary MP4 Social Download Button */}
+              {exportedMp4Url ? (
+                <a
+                  href={exportedMp4Url}
+                  download="legit-africa-commercial-4x5.mp4"
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Social Video (.mp4)</span>
+                  {exportedMp4Blob && (
+                    <span className="text-xs font-normal opacity-90">
+                      ({(exportedMp4Blob.size / 1024 / 1024).toFixed(1)} MB • H.264)
+                    </span>
+                  )}
+                </a>
+              ) : isConvertingToMp4 ? (
+                <button
+                  disabled
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#EAE3D4] text-[#6B6256] font-bold text-sm flex items-center justify-center gap-2 cursor-wait"
+                >
+                  <Sparkles className="w-4 h-4 animate-spin text-[#E8A317]" />
+                  <span>Preparing Social MP4 (H.264)...</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleManualConvertToMp4}
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Convert Video to Social MP4</span>
+                </button>
+              )}
+
+              {/* Secondary Download Actions */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {exportedVideoUrl && (
+                  <a
+                    href={exportedVideoUrl}
+                    download="legit-africa-commercial-4x5.webm"
+                    className="py-2 px-2.5 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] font-semibold text-xs flex items-center justify-center gap-1 border border-[#EAE3D4] cursor-pointer text-center"
+                    title="Download raw WebM file for web archives"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#6B6256]" />
+                    <span>Raw WebM</span>
+                    {exportedVideoBlob && (
+                      <span className="text-[10px] text-[#6B6256]">
+                        ({(exportedVideoBlob.size / 1024 / 1024).toFixed(1)}MB)
+                      </span>
+                    )}
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDownloadSRT}
+                  className="py-2 px-2.5 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] font-semibold text-xs flex items-center justify-center gap-1 border border-[#EAE3D4] cursor-pointer"
+                >
+                  <Subtitles className="w-3.5 h-3.5 text-[#E8A317]" />
+                  <span>.SRT Captions</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportModal(false)}
+                  className="py-2 px-3 rounded-xl bg-white hover:bg-gray-50 text-[#6B6256] font-semibold text-xs border border-[#EAE3D4] cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-[#8C827A] text-center leading-relaxed">
+              Standard <strong>H.264 video + AAC audio</strong> in <strong>4:5 (1080×1350)</strong> with <strong>YUV 4:2:0</strong> and <strong>faststart</strong> metadata — 100% compliant with Instagram, TikTok, WhatsApp, Facebook, and LinkedIn.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -38,8 +38,9 @@ export const ADVERT_SCENES: AdvertScene[] = [
   {
     id: 3,
     voiceLine: 'Or that seller no dey pick your call again after you pay.',
-    visualPrompt: 'A frustrated man staring at his phone; calls to "Seller" going unanswered.',
-    imageSrc: '/scenes/scene3.jpg',
+    visualPrompt:
+      'A young Nigerian man sitting in a dimly lit room, holding a smartphone close to his face. His expression is a mix of intense frustration and sudden panic—his jaw is clenched, his brows are deeply furrowed, and his eyes are wide with disbelief. On the phone screen, a WhatsApp chat window is visible, showing a contact named "Seller" with multiple sent messages that only have single grey ticks (undelivered). The active call screen on the phone suddenly changes to display "Call Ended" or "Line Busy." The scene is highly dramatic and moody. The cold blue light from the smartphone screen sharply illuminates his face, casting deep, tense shadows across the room. High-end cinematography, shallow depth of field with the background softly blurred, 35mm lens style, hyper-realistic skin textures and micro-expressions of raw stress.',
+    imageSrc: '/scenes/scene3_v2.jpg',
     type: 'photo',
   },
   {
@@ -52,7 +53,8 @@ export const ADVERT_SCENES: AdvertScene[] = [
   {
     id: 5,
     voiceLine: 'Abeg, tell that person wetin you know. For Legit Africa.',
-    visualPrompt: 'The LegitAfrica logo appears on a cream background.',
+    visualPrompt:
+      'A professional graphic design layout in a 4:5 vertical aspect ratio (1080x1350) for a brand asset, clean minimalist aesthetic. Off-white/cream background color (#FBF8F1). Upper left corner branding placement featuring a small gold kudu antelope head logo next to "LegitAfrica". Large central branding lockup: large gold kudu antelope head silhouette, bold typography "LEGITAFRICA" (Charcoal/Gold), and sub-headline tagline "REVIEWS YOU CAN TRUST" underneath. Exact slogan text below logo: "Tell them wetin you know." in clean dark charcoal gray. Highly professional modern pill-shaped button solidly filled with vibrant premium gold (no outline) displaying "100% FREE FOR EVERYONE" in crisp clean white bold geometric capital letters with elegant wide letter-spacing.',
     imageSrc: '/brand/logo-clean.png',
     type: 'logo',
   },
@@ -66,7 +68,8 @@ export const ADVERT_SCENES: AdvertScene[] = [
   {
     id: 7,
     voiceLine: 'No business fit pay us to comot honest review.',
-    visualPrompt: 'The review sitting on the business page, with a gold tick beside it.',
+    visualPrompt:
+      'A professional graphic design layout in a 4:5 vertical aspect ratio (1080x1350) for a brand asset, clean minimalist aesthetic.[KEEP THESE ELEMENTS]:Retain the off-white/cream background color.Keep the upper left corner branding placement featuring a small gold kudu antelope head logo next to the text "LegitAfrica".[CENTRAL CARD INTERFACE]:Centered in the middle of the frame, display a prominent, crisp white rounded rectangle card with a soft, clean drop shadow separating it from the cream background. Ensure generous internal padding so text elements do not touch or spill over the edges.Verified Badge Area: Inside the top of the white card, feature a wide, light-beige pill banner. On the left of this banner, place a solid gold circular checkmark icon, followed by the text "Verified Honest Review" in a bold, clean charcoal sans-serif font.Star Ratings: Directly below the badge banner, display a horizontal row of five perfectly aligned, sharp gold five-point stars.[FIXED INTERIOR TEXT & OVERFLOW PREVENTION]:Main Headline Layout: Below the stars, display the prominent quote text: "No business fit pay us to comot honest review."Typography Rules: The text must be in a highly modern, medium-bold charcoal geometric sans-serif font. The font size must be carefully scaled down to fit cleanly inside the width of the card. The text must automatically wrap perfectly into two clean, balanced lines with generous breathing room on the left and right margins.Subtext Paragraphs: Safely underneath the wrapped headline, write the supportive details in a clean, smaller regular-weight gray sans-serif font:Your review stays permanently on the business page.Protecting other customers across Africa.[SOLID GOLD BUTTON LOOK]:Near the bottom inside the white card, place a professional, modern pill-shaped call-to-action box. The box must be solidly filled with a vibrant, premium gold color (no outline).Font Modification: Inside the solid gold box, display the call-to-action text: "100% UNBIASED & FREE" on the first line, with subtext "No sponsored deletions · No fake ratings" directly underneath it. The text must be in a premium, bold, geometric sans-serif font written in crisp, clean white capital letters with elegant, slightly wider letter-spacing for premium readability.[STYLE & QUALITY]:Modern app UI dashboard graphic style, ultra-crisp typography layout, perfect center alignment, perfectly sharp elements, premium corporate look, zero text clipping or layout overflow.',
     imageSrc: '/brand/legitafrica-icon-transparent.png',
     type: 'ui_review',
   },

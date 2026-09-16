@@ -1,5 +1,8 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
+import os from "os";
+import { spawn } from "child_process";
 import dotenv from "dotenv";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { createServer as createViteServer } from "vite";
@@ -257,6 +260,99 @@ Return ONLY the final spoken voiceover script. Do not include sound effects in b
     console.error("Polish script error:", error);
     res.status(500).json({ error: error?.message || "Failed to polish script." });
   }
+});
+
+// Convert WebM canvas recording to Social Media MP4 (H.264 / AAC, yuv420p, faststart)
+app.post("/api/convert-to-mp4", (req, res) => {
+  const tempId = `video_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const inputPath = path.join(os.tmpdir(), `${tempId}.webm`);
+  const outputPath = path.join(os.tmpdir(), `${tempId}.mp4`);
+
+  const writeStream = fs.createWriteStream(inputPath);
+  req.pipe(writeStream);
+
+  function cleanup() {
+    try {
+      if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+    } catch (_) {}
+    try {
+      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+    } catch (_) {}
+  }
+
+  writeStream.on("error", (err) => {
+    console.error("Upload write stream error:", err);
+    res.status(500).json({ error: "Failed to upload video stream." });
+    cleanup();
+  });
+
+  writeStream.on("finish", () => {
+    try {
+      const stats = fs.statSync(inputPath);
+      if (stats.size === 0) {
+        cleanup();
+        return res.status(400).json({ error: "Uploaded video payload is empty." });
+      }
+    } catch (e) {
+      cleanup();
+      return res.status(400).json({ error: "Could not read uploaded video." });
+    }
+
+    // Convert via ffmpeg to standard Social-Media MP4:
+    // -c:v libx264 : standard H.264 video codec required by Instagram, TikTok, FB, WhatsApp
+    // -preset veryfast : fast encoding
+    // -crf 22 : high visual clarity
+    // -pix_fmt yuv420p : 8-bit YUV 4:2:0 format required for mobile hardware decoding
+    // -c:a aac : universal AAC audio codec
+    // -b:a 192k : high fidelity stereo/mono audio
+    // -movflags +faststart : places moov atom at beginning for instant social media upload/streaming
+    const args = [
+      "-y",
+      "-i", inputPath,
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "22",
+      "-pix_fmt", "yuv420p",
+      "-c:a", "aac",
+      "-b:a", "192k",
+      "-movflags", "+faststart",
+      outputPath,
+    ];
+
+    const ffmpeg = spawn("ffmpeg", args);
+    let stderrData = "";
+
+    ffmpeg.stderr.on("data", (chunk) => {
+      stderrData += chunk.toString();
+    });
+
+    ffmpeg.on("close", (code) => {
+      if (code !== 0) {
+        console.error("FFmpeg conversion error:", stderrData);
+        cleanup();
+        return res.status(500).json({ error: "Video conversion to MP4 failed.", details: stderrData.slice(-400) });
+      }
+
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Content-Disposition", 'attachment; filename="legitafrica-commercial-4x5.mp4"');
+
+      const readStream = fs.createReadStream(outputPath);
+      readStream.pipe(res);
+      readStream.on("close", () => {
+        cleanup();
+      });
+      readStream.on("error", (err) => {
+        console.error("ReadStream error streaming MP4:", err);
+        cleanup();
+      });
+    });
+
+    ffmpeg.on("error", (err) => {
+      console.error("Failed to spawn ffmpeg:", err);
+      cleanup();
+      res.status(500).json({ error: "FFmpeg process error." });
+    });
+  });
 });
 
 // Start server with Vite middleware in dev or static serving in production
