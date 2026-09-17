@@ -18,8 +18,9 @@ export function generateScenesFromScript(
   const lower = cleanScript.toLowerCase();
   const isPhoneTech = lower.includes('phone') || lower.includes('gadget') || lower.includes('computer village') || lower.includes('battery');
   const isTailorFashion = lower.includes('tailor') || lower.includes('cloth') || lower.includes('wedding') || lower.includes('ankara') || lower.includes('sew');
-  const isVendorGhost = lower.includes('instagram') || lower.includes('seller') || lower.includes('dm') || lower.includes('transfer') || lower.includes('blocked');
-  const isRentalAuto = lower.includes('car') || lower.includes('house') || lower.includes('rent') || lower.includes('landlord');
+  const isSocial = lower.includes('instagram') || lower.includes('dm') || lower.includes('social') || lower.includes('blocked') || lower.includes('dispatch');
+  const isHousing = lower.includes('landlord') || lower.includes('agent') || lower.includes('rent') || lower.includes('house') || lower.includes('housing') || lower.includes('apartment') || lower.includes('tenant') || lower.includes('caution') || lower.includes('inspection');
+  const isAuto = lower.includes('car') || lower.includes('mechanic') || lower.includes('tokunbo') || lower.includes('mileage') || lower.includes('engine');
 
   // Split lines into 8 beats
   let voiceLines: string[] = [];
@@ -141,6 +142,92 @@ export function generateScenesFromScript(
       },
       {
         visualPrompt: 'End card: LegitAfrica logo with gold kudu, "legitafrica.com" — Save someone money · Drop your review · Free forever.',
+        imageSrc: '/brand/logo-clean.png',
+        type: 'end_card',
+      },
+    ];
+  } else if (isHousing) {
+    sceneTemplates = [
+      {
+        visualPrompt: 'Hand holding phone showing mobile bank transfer debit alert labeled "Inspection Fee & Caution Deposit".',
+        imageSrc: '/scenes/scene1.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Excited prospective tenant with suitcases and boxes arriving at the Lagos apartment compound gate.',
+        imageSrc: '/scenes/scene2.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Shock and disbelief: two other tenants already inside the flat unpacking their own belongings simultaneously.',
+        imageSrc: '/scenes/scene3_v2.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Split-screen: another desperate house-hunter across Lagos about to transfer ₦650,000 to the same fake agent.',
+        imageSrc: '/scenes/scene4.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Mobile browser opening legitafrica.com and typing the real estate agency or agent phone number into search.',
+        imageSrc: '/brand/logo-clean.png',
+        type: 'ui_search',
+      },
+      {
+        visualPrompt: 'Verified tenant review: "Warning: Agent collected double caution fee for flat in Yaba. 1-star verified report."',
+        imageSrc: '/brand/legitafrica-icon-transparent.png',
+        type: 'ui_review',
+      },
+      {
+        visualPrompt: 'Gold kudu trust badge: "Zero tolerance for fake agents. Reviews cannot be paid off or removed."',
+        imageSrc: '/brand/legitafrica-icon-transparent.png',
+        type: 'logo',
+      },
+      {
+        visualPrompt: 'End card: LegitAfrica logo with gold kudu, "legitafrica.com" — Check before paying rent · Save your hard-earned money · Free.',
+        imageSrc: '/brand/logo-clean.png',
+        type: 'end_card',
+      },
+    ];
+  } else if (isAuto) {
+    sceneTemplates = [
+      {
+        visualPrompt: 'Hand holding a car key fob next to a shiny tokunbo vehicle with a "Direct Belgium Used" windshield sticker.',
+        imageSrc: '/scenes/scene1.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Steam pouring from under the car hood on Third Mainland bridge while hazards flash in heavy Lagos traffic.',
+        imageSrc: '/scenes/scene2.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Mechanic holding a wrench, shaking head while pointing out hidden welded frame and masked engine knocking.',
+        imageSrc: '/scenes/scene3_v2.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Another buyer at a roadside car dealership about to wire deposit money to that exact same dealership.',
+        imageSrc: '/scenes/scene4.jpg',
+        type: 'photo',
+      },
+      {
+        visualPrompt: 'Smartphone searching "Lagos Auto Dealers & Mechanics" on Legit Africa with mileage tampering warnings.',
+        imageSrc: '/brand/logo-clean.png',
+        type: 'ui_search',
+      },
+      {
+        visualPrompt: 'Detailed automotive review: "5 Stars - Genuine mileage, computer diagnosis matched, zero hidden faults."',
+        imageSrc: '/brand/legitafrica-icon-transparent.png',
+        type: 'ui_review',
+      },
+      {
+        visualPrompt: 'Brand integrity seal: "Real Nigerian motorists sharing honest ratings. No dealership can buy off reviews."',
+        imageSrc: '/brand/legitafrica-icon-transparent.png',
+        type: 'logo',
+      },
+      {
+        visualPrompt: 'End card: LegitAfrica logo, "legitafrica.com" — Check the dealer first · Real experiences · Free.',
         imageSrc: '/brand/logo-clean.png',
         type: 'end_card',
       },
