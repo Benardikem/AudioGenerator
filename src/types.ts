@@ -77,7 +77,13 @@ export interface AdvertScene {
   voiceLine: string;
   visualPrompt: string;
   imageSrc?: string;
-  type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card';
+  type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card' | 'text';
+  /** type 'text': small uppercase label that fades in above the headline. */
+  eyebrow?: string;
+  /** type 'text': one row per line; wrap words in *stars* to make them gold. */
+  headline?: string;
+  /** type 'text': plain cream background (default), or the scene photo darkened behind the text. */
+  textBackground?: 'cream' | 'photo';
 }
 
 export type AspectRatio = '4:5' | '9:16';

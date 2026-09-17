@@ -47,3 +47,12 @@ in production the server refuses to start without it.
   billed to the Gemini key. Only generate when the user presses the button.
 - The "Push to GitHub" button and modal, the Google Tasks panel, the Campaigns drawer and the
   top-level Storyboard tab were removed on purpose. Do not add them back.
+
+## Scenes belong to the ad being made
+
+- Scenes 1-4 in `SocialVideoOverlay.tsx` draw only the scene's own photo. They used to draw fixed
+  graphics from the first campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card,
+  a WhatsApp chat) on top of every ad's photos. Do not add campaign-specific graphics back into
+  the scene drawing; put them in a photo or a Text scene instead.
+- A scene with `type: 'text'` is a fly-in headline card (eyebrow, headline with `*gold*` words,
+  cream or photo background). It overrides the position-based drawing for any scene 1-8.

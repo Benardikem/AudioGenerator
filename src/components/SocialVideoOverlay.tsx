@@ -421,236 +421,149 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       };
 
       // ----------------------------------------------------
-      // SCENE 1: Close-up hand holding phone showing debit alert for ₦45,000
+      // TEXT (FLY-IN): any scene can be a headline card in the style of the "Check before you pay"
+      // promo. A label fades in, then each line rises from behind its own edge, one after another.
       // ----------------------------------------------------
-      if (currentSceneIndex === 0) {
-        const img = getSceneImage(sceneList[0], '/scenes/scene1.jpg');
-        if (img && img.complete) {
-          drawCoverImage(img, 1.05);
+      const drawFlyInText = () => {
+        const sceneDur = dur / 8;
+        const t = sceneProgress * sceneDur; // seconds into this scene
+        const onPhoto = activeScene.textBackground === 'photo';
+        const FONT = '-apple-system, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif';
+        const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+        const easeOut = (v: number) => 1 - Math.pow(1 - clamp01(v), 4);
+        const setSpacing = (em: number, size: number) => {
+          if ('letterSpacing' in ctx) (ctx as any).letterSpacing = `${em * size}px`;
+        };
+
+        if (onPhoto) {
+          const img = getSceneImage(activeScene, '/scenes/scene1.jpg');
+          if (img && img.complete && img.naturalWidth) drawCoverImage(img, 1.04);
+          else { ctx.fillStyle = BRAND_COLORS.nearBlack; ctx.fillRect(0, 0, W, H); }
+          ctx.fillStyle = 'rgba(24, 22, 20, 0.64)';
+          ctx.fillRect(0, 0, W, H);
         } else {
-          ctx.fillStyle = BRAND_COLORS.sand;
+          ctx.fillStyle = BRAND_COLORS.cream;
           ctx.fillRect(0, 0, W, H);
         }
+        const ink = onPhoto ? BRAND_COLORS.cream : BRAND_COLORS.nearBlack;
+        const muted = onPhoto ? 'rgba(251, 248, 241, 0.78)' : BRAND_COLORS.warmGrey;
+        const gold = onPhoto ? BRAND_COLORS.gold : BRAND_COLORS.darkerGold;
 
-        // Slight dark vignette at edges
-        const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);
-        vig.addColorStop(0, 'rgba(24, 22, 20, 0.15)');
-        vig.addColorStop(1, 'rgba(24, 22, 20, 0.7)');
-        ctx.fillStyle = vig;
-        ctx.fillRect(0, 0, W, H);
+        // Words carry a gold flag; *stars* may span several words.
+        const source = (activeScene.headline || activeScene.voiceLine || '').split('\n').map((l) => l.trim()).filter(Boolean);
+        const rows = source.map((line) => {
+          const words: { text: string; gold: boolean }[] = [];
+          for (const seg of line.split(/(\*[^*]+\*)/).filter(Boolean)) {
+            const isGold = seg.length > 2 && seg.startsWith('*') && seg.endsWith('*');
+            for (const w of (isGold ? seg.slice(1, -1) : seg).split(/\s+/).filter(Boolean)) words.push({ text: w, gold: isGold });
+          }
+          return words;
+        });
 
-        // Crisp Floating Debit Alert Card (Authentic Nigerian Mobile Banking Notification)
-        const cardW = 780;
-        const cardH = 360;
-        const cardX = (W - cardW) / 2;
-        const cardY = 320;
+        // Largest size at which every row fits the width (wrapping long rows) and the block fits.
+        const padX = 96;
+        const maxW = W - padX * 2;
+        let size = 112;
+        let lines: { text: string; gold: boolean }[][] = [];
+        for (; size >= 52; size -= 4) {
+          ctx.font = `800 ${size}px ${FONT}`;
+          setSpacing(-0.035, size);
+          const space = ctx.measureText(' ').width;
+          lines = [];
+          for (const words of rows) {
+            let cur: typeof words = [];
+            let curW = 0;
+            for (const w of words) {
+              const ww = ctx.measureText(w.text).width;
+              if (cur.length && curW + space + ww > maxW) { lines.push(cur); cur = []; curW = 0; }
+              curW += (cur.length ? space : 0) + ww;
+              cur.push(w);
+            }
+            if (cur.length) lines.push(cur);
+          }
+          if (lines.length * size * 1.06 <= H * 0.52 && lines.length <= 6) break;
+        }
+        const lineH = size * 1.06;
+        const eyebrow = (activeScene.eyebrow || '').trim().toUpperCase();
+        const eyebrowH = eyebrow ? 30 + 44 : 0;
+        const blockH = eyebrowH + lines.length * lineH + 46;
+        let y = Math.max(200, (H - blockH) / 2 - 60); // sit a little high, clear of the captions
 
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
-        ctx.shadowBlur = 40;
-        ctx.shadowOffsetY = 20;
+        if (eyebrow) {
+          const p = easeOut((t - 0.12) / 0.5);
+          ctx.save();
+          ctx.globalAlpha = p;
+          ctx.font = `800 30px ${FONT}`;
+          setSpacing(0.3, 30);
+          ctx.fillStyle = muted;
+          ctx.textAlign = 'left';
+          ctx.fillText(eyebrow, padX, y + 26 + (1 - p) * 10);
+          ctx.restore();
+          y += eyebrowH;
+        }
 
-        ctx.fillStyle = BRAND_COLORS.cream;
-        ctx.beginPath();
-        ctx.roundRect(cardX, cardY, cardW, cardH, 32);
-        ctx.fill();
-
-        ctx.strokeStyle = BRAND_COLORS.borders;
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.restore();
-
-        // Bank header badge
-        ctx.fillStyle = BRAND_COLORS.sand;
-        ctx.beginPath();
-        ctx.roundRect(cardX + 40, cardY + 40, 320, 52, 16);
-        ctx.fill();
-
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('BANK DEBIT ALERT', cardX + 60, cardY + 74);
+        lines.forEach((words, i) => {
+          const delay = 0.35 + i * 0.14;
+          const p = easeOut((t - delay) / 0.78);
+          const top = y + i * lineH;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, top - size * 0.08, W, lineH + size * 0.16); // the edge each line rises from behind
+          ctx.clip();
+          ctx.font = `800 ${size}px ${FONT}`;
+          setSpacing(-0.035, size);
+          const space = ctx.measureText(' ').width;
+          let x = padX;
+          const baseline = top + size * 0.9 + (1 - p) * lineH * 1.12;
+          for (const w of words) {
+            ctx.fillStyle = w.gold ? gold : ink;
+            ctx.fillText(w.text, x, baseline);
+            x += ctx.measureText(w.text).width + space;
+          }
+          ctx.restore();
+        });
 
-        // Transaction Amount (Strict rule: ₦45,000)
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = '900 68px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText('₦45,000.00', cardX + 40, cardY + 180);
+        // Gold rule that draws in once the last line has landed.
+        const barP = easeOut((t - (0.35 + lines.length * 0.14 + 0.45)) / 0.6);
+        if (barP > 0) {
+          ctx.fillStyle = BRAND_COLORS.gold;
+          ctx.beginPath();
+          ctx.roundRect(padX, y + lines.length * lineH + 30, 220 * barP, 10, 5);
+          ctx.fill();
+        }
+        if ('letterSpacing' in ctx) (ctx as any).letterSpacing = '0px';
+      };
 
-        // Transaction details
-        ctx.fillStyle = BRAND_COLORS.warmGrey;
-        ctx.font = '500 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText('Txn: Instant Bank Transfer to Vendor', cardX + 40, cardY + 235);
-        ctx.fillText('Status: Successful / Paid Out', cardX + 40, cardY + 280);
-
-        // Subtle gold status tick
-        ctx.fillStyle = BRAND_COLORS.gold;
-        ctx.beginPath();
-        ctx.arc(cardX + cardW - 70, cardY + 70, 24, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = BRAND_COLORS.cream;
-        ctx.font = 'bold 26px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('✓', cardX + cardW - 70, cardY + 78);
+      if (activeScene?.type === 'text') {
+        drawFlyInText();
       }
 
       // ----------------------------------------------------
-      // SCENE 2: Smiling young woman trying on well-fitted ankara outfit in tailor's shop
+      // SCENES 1-4: the ad's own photo. These used to draw fixed graphics from the first campaign
+      // (a ₦45,000 debit alert, a named tailor shop, a "Seller (Vendor)" call card, a WhatsApp
+      // chat) over whatever photo was chosen, so every ad looked like that one. Now each is the
+      // photo alone, with a slow zoom and shading that keeps the watermark and captions readable.
       // ----------------------------------------------------
-      else if (currentSceneIndex === 1) {
-        const img = getSceneImage(sceneList[1], '/scenes/scene2.jpg');
-        if (img && img.complete) {
-          drawCoverImage(img, 1.06, -10);
+      else if (currentSceneIndex <= 3) {
+        const fallbacks = ['/scenes/scene1.jpg', '/scenes/scene2.jpg', '/scenes/scene3_v2.jpg', '/scenes/scene4.jpg'];
+        const img = getSceneImage(sceneList[currentSceneIndex], fallbacks[currentSceneIndex]);
+        if (img && img.complete && img.naturalWidth) {
+          drawCoverImage(img, 1.08);
         } else {
           ctx.fillStyle = BRAND_COLORS.sand;
           ctx.fillRect(0, 0, W, H);
         }
-
-        // Soft lower third overlay
-        const grad = ctx.createLinearGradient(0, H * 0.65, 0, H);
-        grad.addColorStop(0, 'rgba(24, 22, 20, 0)');
-        grad.addColorStop(1, 'rgba(24, 22, 20, 0.75)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, H * 0.65, W, H * 0.35);
-
-        // Context Badge: Invented Tailor Shop
-        ctx.fillStyle = 'rgba(251, 248, 241, 0.92)';
-        ctx.beginPath();
-        ctx.roundRect(80, 140, 520, 80, 24);
-        ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.borders;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 30px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Adeola Fashion Atelier', 115, 190);
-      }
-
-      // ----------------------------------------------------
-      // SCENE 3: Frustrated Nigerian man holding smartphone in dimly lit room
-      // Hyper-realistic cinematography: cold blue phone glow, tense shadows, WhatsApp undelivered single tick
-      // ----------------------------------------------------
-      else if (currentSceneIndex === 2) {
-        const img = getSceneImage(sceneList[2], '/scenes/scene3_v2.jpg');
-        if (img && img.complete) {
-          drawCoverImage(img, 1.06);
-        } else {
-          ctx.fillStyle = BRAND_COLORS.sand;
-          ctx.fillRect(0, 0, W, H);
-        }
-
-        // Cinematic Moody Vignette emphasizing screen glow & shadows
-        const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.25, W / 2, H / 2, W * 0.75);
-        vig.addColorStop(0, 'rgba(24, 22, 20, 0.05)');
-        vig.addColorStop(1, 'rgba(24, 22, 20, 0.65)');
-        ctx.fillStyle = vig;
-        ctx.fillRect(0, 0, W, H);
-
-        // Sleek, authentic mobile call status pill (top of screen, unobtrusive)
-        const toastW = 720;
-        const toastH = 92;
-        const toastX = (W - toastW) / 2;
-        const toastY = 160;
-
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = 25;
-        ctx.shadowOffsetY = 10;
-        ctx.fillStyle = 'rgba(24, 22, 20, 0.9)';
-        ctx.beginPath();
-        ctx.roundRect(toastX, toastY, toastW, toastH, 26);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(232, 163, 23, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        // Phone call red indicator dot
-        ctx.fillStyle = '#E53E3E';
-        ctx.beginPath();
-        ctx.arc(toastX + 44, toastY + 46, 12, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 26px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Seller (Vendor)', toastX + 75, toastY + 42);
-
-        ctx.fillStyle = '#EAE3D4';
-        ctx.font = '500 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText('Line Busy · Call Ended · Single grey tick on WhatsApp', toastX + 75, toastY + 72);
-
-        // Call ended cross
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.beginPath();
-        ctx.arc(toastX + toastW - 44, toastY + 46, 22, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#EAE3D4';
-        ctx.font = 'bold 20px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('✕', toastX + toastW - 44, toastY + 53);
-        ctx.restore();
-      }
-
-      // ----------------------------------------------------
-      // SCENE 4: Another person on WhatsApp typing "Is it still available?", about to pay
-      // ----------------------------------------------------
-      else if (currentSceneIndex === 3) {
-        const img = getSceneImage(sceneList[3], '/scenes/scene4.jpg');
-        if (img && img.complete) {
-          drawCoverImage(img, 1.05);
-        } else {
-          ctx.fillStyle = BRAND_COLORS.sand;
-          ctx.fillRect(0, 0, W, H);
-        }
-
-        // Dark gradient overlay
-        const grad = ctx.createLinearGradient(0, 0, 0, H);
-        grad.addColorStop(0, 'rgba(24, 22, 20, 0.4)');
-        grad.addColorStop(0.5, 'rgba(24, 22, 20, 0.2)');
-        grad.addColorStop(1, 'rgba(24, 22, 20, 0.7)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, W, H);
-
-        // Chat Bubble Simulation (Cream & White with near-black text)
-        const bubbleW = 680;
-        const bubbleX = (W - bubbleW) / 2;
-
-        // Message 1: Buyer asking
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-        ctx.shadowBlur = 25;
-        ctx.fillStyle = BRAND_COLORS.white;
-        ctx.beginPath();
-        ctx.roundRect(bubbleX, 320, bubbleW, 140, 24);
-        ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.borders;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 32px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('"Is it still available?"', bubbleX + 40, 385);
-        ctx.fillStyle = BRAND_COLORS.warmGrey;
-        ctx.font = '24px sans-serif';
-        ctx.fillText('Waiting for account details to pay...', bubbleX + 40, 425);
-
-        // Warning thought bubble: "About to pay the same seller"
-        ctx.save();
-        ctx.fillStyle = BRAND_COLORS.sand;
-        ctx.beginPath();
-        ctx.roundRect(bubbleX, 490, bubbleW, 110, 20);
-        ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.gold;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.restore();
-
-        ctx.fillStyle = BRAND_COLORS.nearBlack;
-        ctx.font = 'bold 26px sans-serif';
-        ctx.fillText('⚡ Another buyer is about to send money!', bubbleX + 40, 555);
+        const topShade = ctx.createLinearGradient(0, 0, 0, H * 0.22);
+        topShade.addColorStop(0, 'rgba(24, 22, 20, 0.35)');
+        topShade.addColorStop(1, 'rgba(24, 22, 20, 0)');
+        ctx.fillStyle = topShade;
+        ctx.fillRect(0, 0, W, H * 0.22);
+        const bottomShade = ctx.createLinearGradient(0, H * 0.55, 0, H);
+        bottomShade.addColorStop(0, 'rgba(24, 22, 20, 0)');
+        bottomShade.addColorStop(1, 'rgba(24, 22, 20, 0.72)');
+        ctx.fillStyle = bottomShade;
+        ctx.fillRect(0, H * 0.55, W, H * 0.45);
       }
 
       // ----------------------------------------------------

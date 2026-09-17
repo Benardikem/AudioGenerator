@@ -46,6 +46,9 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [sceneType, setSceneType] = useState<AdvertScene['type']>('photo');
+  const [eyebrow, setEyebrow] = useState('');
+  const [headline, setHeadline] = useState('');
+  const [textBackground, setTextBackground] = useState<'cream' | 'photo'>('cream');
 
   useEffect(() => {
     if (scene) {
@@ -53,6 +56,9 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setVisualPrompt(scene.visualPrompt || '');
       setImageSrc(scene.imageSrc || '/scenes/scene1.jpg');
       setSceneType(scene.type || 'photo');
+      setEyebrow(scene.eyebrow || '');
+      setHeadline(scene.headline || '');
+      setTextBackground(scene.textBackground || 'cream');
     }
   }, [scene]);
 
@@ -91,6 +97,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       visualPrompt: visualPrompt.trim() || scene.visualPrompt,
       imageSrc: imageSrc.trim() || scene.imageSrc,
       type: sceneType,
+      ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
     onClose();
   };
@@ -127,6 +134,80 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
         {/* Content Form */}
         <div className="space-y-4">
+          {/* 0. Scene style */}
+          <div>
+            <label className="block text-xs font-bold text-[#181614] mb-1.5">Scene style</label>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { id: 'photo', label: 'Photo' },
+                { id: 'text', label: 'Text (fly-in)' },
+                ...(['logo', 'ui_search', 'ui_review', 'end_card'].includes(scene.type)
+                  ? [{ id: scene.type, label: 'LegitAfrica graphic' }]
+                  : []),
+              ] as { id: AdvertScene['type']; label: string }[]).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setSceneType(opt.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                    sceneType === opt.id
+                      ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                      : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614]'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {sceneType === 'text' && (
+            <div className="bg-[#FBF8F1] p-3.5 rounded-2xl border border-[#E8A317]/40 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#181614] mb-1">Small label (optional)</label>
+                <input
+                  value={eyebrow}
+                  onChange={(e) => setEyebrow(e.target.value)}
+                  maxLength={40}
+                  placeholder="e.g. WHAT HAPPENED NEXT"
+                  className="w-full p-2.5 text-xs bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#181614] mb-1">Headline</label>
+                <textarea
+                  value={headline}
+                  onChange={(e) => setHeadline(e.target.value)}
+                  rows={3}
+                  placeholder={'One line per row. Each row flies in after the one before.\nPut a word in *stars* to make it gold.'}
+                  className="w-full p-3 text-sm bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614] font-semibold"
+                />
+                <p className="text-[11px] text-[#6B6256] mt-1">
+                  Example: <span className="font-mono">Before you pay any agent,</span> / <span className="font-mono">*search am first.*</span>
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#181614] mb-1">Background</label>
+                <div className="flex gap-2">
+                  {(['cream', 'photo'] as const).map((bg) => (
+                    <button
+                      key={bg}
+                      type="button"
+                      onClick={() => setTextBackground(bg)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                        textBackground === bg
+                          ? 'bg-[#181614] border-[#181614] text-white'
+                          : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614]'
+                      }`}
+                    >
+                      {bg === 'cream' ? 'Plain cream' : 'Over my photo'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 1. Voiceover Narration */}
           <div>
             <label className="flex items-center justify-between text-xs font-bold text-[#181614] mb-1.5">
@@ -171,6 +252,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           </div>
 
           {/* 3. Artwork & Image Selection */}
+          {(sceneType !== 'text' || textBackground === 'photo') && (
           <div>
             <label className="block text-xs font-bold text-[#181614] mb-1.5">
               Scene Artwork / Background Image
@@ -232,6 +314,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               </div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Footer Actions */}
