@@ -95,7 +95,6 @@ export const CampaignArchiveView: React.FC<CampaignArchiveViewProps> = ({
             <FolderOpen className="w-4 h-4 text-[#E8A317]" />
             Saved Ads ({savedCommercials.length})
           </h3>
-          <span className="text-xs text-[#6B6256]">Saved on your studio server</span>
         </div>
 
         {savedCommercials.length === 0 ? (
@@ -123,7 +122,7 @@ export const CampaignArchiveView: React.FC<CampaignArchiveViewProps> = ({
                 <tr>
                   <th className={th}>Title</th>
                   <th className={th}>Voice</th>
-                  <th className={th}>Audio</th>
+                  <th className={th}>Voiceover</th>
                   <th className={th}>Scenes</th>
                   <th className={th}>Format</th>
                   <th className={th}>Last saved</th>
@@ -148,9 +147,14 @@ export const CampaignArchiveView: React.FC<CampaignArchiveViewProps> = ({
                       <td className={td}>{comm.voiceName || comm.voice}</td>
                       <td className={td}>
                         {comm.audioUrl ? (
-                          <span className="font-mono">{comm.duration ? `${comm.duration}s` : 'Yes'}</span>
+                          <span className="font-mono">{comm.duration ? `${comm.duration}s` : 'Saved'}</span>
                         ) : (
-                          <span className="text-[#6B6256]">None yet</span>
+                          <span
+                            className="text-[#6B6256]"
+                            title="No voiceover saved with this ad. Generate one in Script & Voice, then press Save."
+                          >
+                            Not generated
+                          </span>
                         )}
                       </td>
                       <td className={`${td} font-mono`}>{sceneCount(comm)}</td>
