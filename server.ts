@@ -268,6 +268,357 @@ Return ONLY the final spoken voiceover script. Do not include sound effects in b
   }
 });
 
+// Generate a full commercial campaign (title, script, 8 scenes) from a user topic or prompt
+app.post("/api/create-ad-campaign", async (req, res) => {
+  const { topic = "", style = "pidgin_warm", businessType = "General" } = req.body;
+
+  // Local rule-based high-craft campaign generator as guaranteed fallback
+  const generateFallback = () => {
+    const text = (topic || "").toLowerCase();
+    const isTech = text.includes("phone") || text.includes("gadget") || text.includes("battery") || text.includes("computer village");
+    const isTailor = text.includes("tailor") || text.includes("wedding") || text.includes("cloth") || text.includes("sew");
+
+    let title = "Legit Africa Consumer Protection";
+    let script = "";
+    let scenes: any[] = [];
+
+    if (isTech) {
+      title = "Computer Village Phone Caution";
+      script = `Buyer bought phone labeled brand new in Computer Village Ikeja.
+48 hours later, battery die completely.
+Shop owner say warranty no cover battery.
+Right now, another person dey transfer money give that same shop!
+Abeg, tell that person wetin you know.
+Search the gadget shop for Legit Africa dot com.
+Yarn wetin happen, good or bad.
+No business fit pay to comot honest review. Legit Africa dot com. E free!`;
+      scenes = [
+        {
+          id: 1,
+          voiceLine: "Buyer bought phone labeled brand new in Computer Village Ikeja.",
+          visualPrompt: "Customer in a bustling Ikeja tech shop receiving a boxed smartphone with a 'Brand New' seal.",
+          type: "photo",
+          imageSrc: "/scenes/scene1.jpg",
+        },
+        {
+          id: 2,
+          voiceLine: "48 hours later, battery die completely.",
+          visualPrompt: "Close-up of the phone on a bedside table showing black screen and 0% red battery warning icon.",
+          type: "photo",
+          imageSrc: "/scenes/scene3.jpg",
+        },
+        {
+          id: 3,
+          voiceLine: "Shop owner say warranty no cover battery.",
+          visualPrompt: "Frustrated customer holding the dead phone at the gadget counter; shopkeeper dismissively turns away.",
+          type: "photo",
+          imageSrc: "/scenes/scene3_v2.jpg",
+        },
+        {
+          id: 4,
+          voiceLine: "Right now, another person dey transfer money give that same shop!",
+          visualPrompt: "Another buyer across town holding their ATM debit card, about to make a transfer to the same shop.",
+          type: "photo",
+          imageSrc: "/scenes/scene4.jpg",
+        },
+        {
+          id: 5,
+          voiceLine: "Abeg, tell that person wetin you know.",
+          visualPrompt: "Mobile screen opening Legit Africa app, entering shop name into the search bar.",
+          type: "ui_search",
+          imageSrc: "/brand/logo-clean.png",
+        },
+        {
+          id: 6,
+          voiceLine: "Search the gadget shop for Legit Africa dot com.",
+          visualPrompt: "Verified customer review page displaying shop profile, 5 gold stars rating, and honest feedback.",
+          type: "ui_review",
+          imageSrc: "/brand/legitafrica-icon-transparent.png",
+        },
+        {
+          id: 7,
+          voiceLine: "Yarn wetin happen, good or bad.",
+          visualPrompt: "Brand promise card: 'No business fit pay us to comot honest review. Protecting buyers across Africa.'",
+          type: "logo",
+          imageSrc: "/brand/legitafrica-icon-transparent.png",
+        },
+        {
+          id: 8,
+          voiceLine: "No business fit pay to comot honest review. Legit Africa dot com. E free!",
+          visualPrompt: "End card: Official LegitAfrica logo lockup, 'legitafrica.com' — Verified Tech Reviews · Always Free.",
+          type: "end_card",
+          imageSrc: "/brand/logo-clean.png",
+        },
+      ];
+    } else if (isTailor) {
+      title = "Lagos Tailor Wedding Dilemma";
+      script = `You don pay tailor three weeks ago.
+Friday evening before Saturday wedding, cloth never ready.
+Tailor phone switch off, no pick call.
+Right now, another person wan send advance payment give that same tailor!
+Abeg, save that person money.
+Search the fashion designer for Legit Africa dot com.
+Drop honest review of wetin happen.
+No business fit pay to delete review. Legit Africa dot com. Na free!`;
+      scenes = [
+        {
+          id: 1,
+          voiceLine: "You don pay tailor three weeks ago.",
+          visualPrompt: "Bank debit alert on phone showing transfer receipt for wedding ankara fashion fabrics.",
+          type: "photo",
+          imageSrc: "/scenes/scene1.jpg",
+        },
+        {
+          id: 2,
+          voiceLine: "Friday evening before Saturday wedding, cloth never ready.",
+          visualPrompt: "Anxious customer checking wall clock as Friday night approaches without their wedding outfit.",
+          type: "photo",
+          imageSrc: "/scenes/scene2.jpg",
+        },
+        {
+          id: 3,
+          voiceLine: "Tailor phone switch off, no pick call.",
+          visualPrompt: "Frustrated young man staring in disbelief at his phone showing 'Number Busy' or 'Call Ended'.",
+          type: "photo",
+          imageSrc: "/scenes/scene3_v2.jpg",
+        },
+        {
+          id: 4,
+          voiceLine: "Right now, another person wan send advance payment give that same tailor!",
+          visualPrompt: "Another lady typing on WhatsApp asking the tailor 'Is Saturday delivery guaranteed?'.",
+          type: "photo",
+          imageSrc: "/scenes/scene4.jpg",
+        },
+        {
+          id: 5,
+          voiceLine: "Abeg, save that person money.",
+          visualPrompt: "Legit Africa search interface searching fashion designers by city with verified delivery reliability badges.",
+          type: "ui_search",
+          imageSrc: "/brand/logo-clean.png",
+        },
+        {
+          id: 6,
+          voiceLine: "Search the fashion designer for Legit Africa dot com.",
+          visualPrompt: "Verified customer review: 'Delivered 3 days early, perfect stitching. 5 stars on Legit Africa.'",
+          type: "ui_review",
+          imageSrc: "/brand/legitafrica-icon-transparent.png",
+        },
+        {
+          id: 7,
+          voiceLine: "Drop honest review of wetin happen.",
+          visualPrompt: "Gold kudu banner: 'Businesses cannot pay to remove or hide customer reviews.'",
+          type: "logo",
+          imageSrc: "/brand/legitafrica-icon-transparent.png",
+        },
+        {
+          id: 8,
+          voiceLine: "No business fit pay to delete review. Legit Africa dot com. Na free!",
+          visualPrompt: "End card: Official LegitAfrica logo, 'legitafrica.com' — Real experiences · Verified reviews · Free.",
+          type: "end_card",
+          imageSrc: "/brand/logo-clean.png",
+        },
+      ];
+    } else {
+      const topicWords = topic.trim() || "unverified online sellers";
+      title = `${businessType || "Merchant"} Consumer Alert`;
+      script = `You don pay vendor. So you sabi wetin happen.
+Maybe them deliver sharp sharp, or maybe them stop to pick call.
+Right now, another person dey about to make transfer to that same vendor!
+Abeg, tell that person wetin you know.
+Go Legit Africa dot com.
+Search the business name. Say wetin happen, good or bad.
+No business fit pay us to delete honest review.
+Save person money. Legit Africa dot com. E 100% free!`;
+      scenes = [
+        {
+          id: 1,
+          voiceLine: "You don pay vendor. So you sabi wetin happen.",
+          visualPrompt: `Close-up shot of a buyer making a mobile payment transaction for ${topicWords}.`,
+          type: "photo",
+          imageSrc: "/scenes/scene1.jpg",
+        },
+        {
+          id: 2,
+          voiceLine: "Maybe them deliver sharp sharp, or maybe them stop to pick call.",
+          visualPrompt: "Customer waiting by the door or checking messaging notifications for order updates.",
+          type: "photo",
+          imageSrc: "/scenes/scene2.jpg",
+        },
+        {
+          id: 3,
+          voiceLine: "Right now, another person dey about to make transfer to that same vendor!",
+          visualPrompt: "Dramatic shot of customer holding phone showing single grey tick on seller WhatsApp chat.",
+          type: "photo",
+          imageSrc: "/scenes/scene3_v2.jpg",
+        },
+        {
+          id: 4,
+          voiceLine: "Abeg, tell that person wetin you know.",
+          visualPrompt: "Split-screen of another buyer about to tap 'Send Money' to the exact same vendor account.",
+          type: "photo",
+          imageSrc: "/scenes/scene4.jpg",
+        },
+        {
+          id: 5,
+          voiceLine: "Go Legit Africa dot com.",
+          visualPrompt: "Clean mobile browser entering 'legitafrica.com' and searching the business name.",
+          type: "ui_search",
+          imageSrc: "/brand/logo-clean.png",
+        },
+        {
+          id: 6,
+          voiceLine: "Search the business name. Say wetin happen, good or bad.",
+          visualPrompt: "Customer leaving a detailed rating with 5 gold stars and verified customer checkmark.",
+          type: "ui_review",
+          imageSrc: "/brand/legitafrica-icon-transparent.png",
+        },
+        {
+          id: 7,
+          voiceLine: "No business fit pay us to delete honest review.",
+          visualPrompt: "Clean gold brand badge: 'Zero sponsored deletions. 100% Honest customer community.'",
+          type: "logo",
+          imageSrc: "/brand/legitafrica-icon-transparent.png",
+        },
+        {
+          id: 8,
+          voiceLine: "Save person money. Legit Africa dot com. E 100% free!",
+          visualPrompt: "End card: Official LegitAfrica logo lockup, 'legitafrica.com' — Reviews you can trust · Free.",
+          type: "end_card",
+          imageSrc: "/brand/logo-clean.png",
+        },
+      ];
+    }
+
+    return { title, script, scenes };
+  };
+
+  try {
+    const ai = getGeminiClient();
+
+    let styleDirection = "";
+    switch (style) {
+      case "pidgin_warm":
+      case "pidgin_blend":
+        styleDirection = "Speak in authentic, warm Nigerian Pidgin English. Conversational, everyday Lagos vibe, trustworthy, relatable, and calm.";
+        break;
+      case "social_reels":
+        styleDirection = "Speak like a relatable social media creator talking directly to their phone camera on Instagram Reels or TikTok. Casual, authentic, and engaging.";
+        break;
+      case "storytime_pov":
+        styleDirection = "Frame as an eye-opening Storytime narrative ('Let me tell you about what happened...'). Grounded, suspenseful, and honest.";
+        break;
+      case "urgent_alert":
+        styleDirection = "Speak with a serious, urgent consumer protection tone to warn buyers before they send money.";
+        break;
+      default:
+        styleDirection = "Speak in authentic Nigerian Pidgin with warm, trustworthy pacing.";
+        break;
+    }
+
+    const prompt = `You are an expert commercial director and voiceover writer for "Legit Africa" (legitafrica.com).
+Legit Africa is a trusted consumer review platform in Africa where customers search businesses, read genuine reviews before paying, and post real feedback (good or bad) that businesses cannot pay to remove.
+
+The user wants to create a new commercial ad about:
+Topic / Story: "${topic || "Protecting everyday buyers from unverified vendors"}"
+Business Category: "${businessType}"
+
+Delivery Tone: ${styleDirection}
+
+Generate a JSON object with:
+1. "title": A short, punchy 3-6 word campaign title (e.g., "Computer Village Phone Caution" or "Lekki Tailor Wedding Dilemma")
+2. "script": A 30-35 second spoken voiceover script formatted in 8-10 short, readable lines. Must include:
+   - Strong hook in the first line
+   - The dilemma or vendor scenario
+   - The solution: Search the business on Legit Africa dot com before paying
+   - Punchy call to action: "Search the business. Say wetin happen, good or bad. Legit Africa dot com. E free!"
+3. "scenes": An array of exactly 8 scene objects representing an 8-beat video storyboard:
+   - "id": 1 through 8
+   - "voiceLine": A short phrase from the script corresponding to this scene beat
+   - "visualPrompt": A descriptive camera/visual direction for what is shown on screen
+   - "type": One of: "photo", "photo", "photo", "photo", "ui_search", "ui_review", "logo", "end_card" (matching scenes 1-8 respectively)
+
+Output ONLY valid JSON without Markdown blocks or extra text:
+{
+  "title": "...",
+  "script": "...",
+  "scenes": [
+    { "id": 1, "voiceLine": "...", "visualPrompt": "...", "type": "photo" }
+  ]
+}`;
+
+    let response: any;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        },
+      });
+    } catch (errFirst) {
+      console.warn("gemini-2.5-flash failed, attempting gemini-2.0-flash...", errFirst);
+      response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+        },
+      });
+    }
+
+    const text = response?.text || "{}";
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+      data = JSON.parse(cleaned);
+    }
+
+    const fallbackImages: Record<number, string> = {
+      1: "/scenes/scene1.jpg",
+      2: "/scenes/scene2.jpg",
+      3: "/scenes/scene3.jpg",
+      4: "/scenes/scene3_v2.jpg",
+      5: "/brand/logo-clean.png",
+      6: "/brand/legitafrica-icon-transparent.png",
+      7: "/brand/legitafrica-icon-transparent.png",
+      8: "/brand/logo-clean.png",
+    };
+
+    const formattedScenes = (data.scenes || []).map((s: any, idx: number) => {
+      const id = s.id || idx + 1;
+      return {
+        id,
+        voiceLine: s.voiceLine || "",
+        visualPrompt: s.visualPrompt || `Scene ${id} camera direction.`,
+        type: s.type || (id <= 4 ? "photo" : id === 5 ? "ui_search" : id === 6 ? "ui_review" : id === 7 ? "logo" : "end_card"),
+        imageSrc: fallbackImages[id] || "/scenes/scene1.jpg",
+      };
+    });
+
+    if (formattedScenes.length === 8 && data.title && data.script) {
+      return res.json({
+        title: data.title,
+        script: data.script,
+        scenes: formattedScenes,
+      });
+    }
+
+    // If model returned incomplete JSON, merge with fallback
+    const fb = generateFallback();
+    res.json({
+      title: data.title || fb.title,
+      script: data.script || fb.script,
+      scenes: formattedScenes.length === 8 ? formattedScenes : fb.scenes,
+    });
+  } catch (error: any) {
+    console.warn("AI generation encountered traffic/quota. Activating intelligent fallback:", error?.message);
+    const fb = generateFallback();
+    res.json(fb);
+  }
+});
+
 // Convert WebM canvas recording to Social Media MP4 (H.264 / AAC, yuv420p, faststart)
 app.post("/api/convert-to-mp4", (req, res) => {
   const tempId = `video_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;

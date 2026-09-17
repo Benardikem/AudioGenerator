@@ -297,35 +297,40 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     }
   }, [audioUrl, bgmTheme, bgmVolume, customBgmUrl]);
 
-  // Play / Pause Sync
+  // Play / Pause Sync with bulletproof fallback
   const togglePlayPause = () => {
-    if (!audioUrl) {
-      if (onGenerateAudioClick) {
-        pendingPlayRef.current = true;
-        onGenerateAudioClick();
+    const audio = audioRef.current;
+
+    if (isPlaying) {
+      if (audio && audioUrl) {
+        audio.pause();
       }
+      setIsPlaying(false);
+      soundEngine.stopBgmBed();
       return;
     }
 
-    const audio = audioRef.current;
-    if (audio) {
-      if (isPlaying) {
-        audio.pause();
-        setIsPlaying(false);
-        soundEngine.stopBgmBed();
-      } else {
-        if (audio.muted && !isMuted) {
-          audio.muted = false;
-        }
-        audio.play().then(() => {
-          setIsPlaying(true);
-          if (bgmTheme === 'custom' && customBgmUrl) {
-            soundEngine.startCustomAudio(customBgmUrl, bgmVolume);
-          } else if (bgmTheme !== 'off') {
-            soundEngine.startBgmBed(bgmTheme, bgmVolume);
-          }
-        }).catch((e) => console.error('Audio play error:', e));
+    // Starting playback
+    setIsPlaying(true);
+
+    if (audio && audioUrl) {
+      if (audio.ended || audio.currentTime >= (totalDuration || 32) - 0.2) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+        currentTimeRef.current = 0;
       }
+      if (audio.muted && !isMuted) {
+        audio.muted = false;
+      }
+      audio.play().catch((e) => {
+        console.warn('Audio play notice (clock fallback active):', e);
+      });
+    }
+
+    if (bgmTheme === 'custom' && customBgmUrl) {
+      soundEngine.startCustomAudio(customBgmUrl, bgmVolume);
+    } else if (bgmTheme !== 'off') {
+      soundEngine.startBgmBed(bgmTheme, bgmVolume);
     }
   };
 
@@ -1283,14 +1288,24 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       lastTime = now;
 
       let nextTime: number;
-      if (audioRef.current && audioUrl) {
-        nextTime = audioRef.current.currentTime;
+      const audio = audioRef.current;
+      const dur = totalDurationRef.current || 32;
+
+      // If audio element is playing and advancing, lock frame-accurately to audio
+      if (audio && audioUrl && !audio.paused && audio.currentTime > 0) {
+        nextTime = audio.currentTime;
       } else {
         nextTime = currentTimeRef.current + dt;
-        if (nextTime >= (totalDurationRef.current || 32)) {
-          nextTime = 0;
-          setIsPlaying(false);
+      }
+
+      if (nextTime >= dur) {
+        nextTime = 0;
+        if (audio && audioUrl) {
+          audio.pause();
+          audio.currentTime = 0;
         }
+        setIsPlaying(false);
+        soundEngine.stopBgmBed();
       }
 
       currentTimeRef.current = nextTime;

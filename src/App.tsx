@@ -23,6 +23,8 @@ import {
   ChevronRight,
   Star,
   Plus,
+  FileText,
+  Eye,
 } from 'lucide-react';
 import { ScriptEditor, DEFAULT_SCRIPT } from './components/ScriptEditor';
 import { VoiceSelector, VOICE_OPTIONS } from './components/VoiceSelector';
@@ -30,6 +32,8 @@ import { AudioVisualizer } from './components/AudioVisualizer';
 import { SocialVideoOverlay } from './components/SocialVideoOverlay';
 import { StoryboardEditor } from './components/StoryboardEditor';
 import { GoogleTasksPanel } from './components/GoogleTasksPanel';
+import { CampaignArchiveView } from './components/CampaignArchiveView';
+import { generateScenesFromScript } from './utils/sceneGenerator';
 import { GeneratedCommercial, CommercialPreset, AdvertScene, AspectRatio } from './types';
 import { BRAND_COLORS, ADVERT_SCENES } from './data/advertScenes';
 import { CommercialsDrawer } from './components/CommercialsDrawer';
@@ -42,6 +46,7 @@ import {
 } from './lib/commercialsDb';
 import { testConnection } from './lib/firebase';
 import { FolderOpen, Save } from 'lucide-react';
+import { NewCommercialModal } from './components/NewCommercialModal';
 
 export default function App() {
   const [script, setScript] = useState(DEFAULT_SCRIPT);
@@ -53,6 +58,7 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showGitModal, setShowGitModal] = useState(false);
+  const [showNewModal, setShowNewModal] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState(false);
 
   // Synchronized 8 scenes with interactive editing and preview
@@ -176,30 +182,60 @@ export default function App() {
       setTakes((prev) => [loadedTake, ...prev.filter((t) => t.id !== loadedTake.id)]);
     }
 
+    setActivePage('video');
     setDbNotice(`Loaded: "${comm.title}"`);
     setTimeout(() => setDbNotice(null), 3500);
   };
 
-  // Create a brand new commercial (resets to fresh state ready for title)
+  // Open the New Commercial creation modal
   const handleNewCommercial = () => {
+    setShowNewModal(true);
+  };
+
+  // Called when user creates or generates a new commercial in the modal
+  const handleCreateCommercialFromModal = (data: {
+    title: string;
+    script: string;
+    scenes?: AdvertScene[];
+    aspectRatio?: AspectRatio;
+  }) => {
     setActiveCommercialId(null);
-    setCampaignTitle('New LegitAfrica Commercial');
-    setScript(DEFAULT_SCRIPT);
-    setScenes(ADVERT_SCENES);
+    setCampaignTitle(data.title);
+    setScript(data.script);
+    const newScenes = data.scenes && data.scenes.length === 8
+      ? data.scenes
+      : generateScenesFromScript(data.script, data.title);
+    setScenes(newScenes);
+    if (data.aspectRatio) {
+      setAspectRatio(data.aspectRatio);
+    }
     setActiveSceneIndex(0);
     setSceneVersion((v) => v + 1);
+    // Clear old audio takes and active commercial so previous commercial never lingers
     setActiveCommercial(null);
-    setDbNotice('Started new commercial draft.');
-    setTimeout(() => setDbNotice(null), 3000);
+    setTakes([]);
+    setActivePage('script');
+    setDbNotice(`Draft created: "${data.title}". Click 'Generate Voiceover Audio' below!`);
+    setTimeout(() => setDbNotice(null), 5000);
+  };
+
+  // Auto-synchronize all 8 storyboard scenes directly from the current script
+  const handleGenerateScenesFromCurrentScript = () => {
+    const newScenes = generateScenesFromScript(script, campaignTitle);
+    handleUpdateScenes(newScenes);
+    setDbNotice('Synced 8 visual storyboard scenes to match your current script!');
+    setTimeout(() => setDbNotice(null), 4000);
   };
 
   // Delete a commercial from the database
-  const handleDeleteSavedCommercial = async (id: string) => {
+  const handleDeleteSavedCommercial = async (id: string, title?: string) => {
     try {
       await deleteCommercial(id);
       if (activeCommercialId === id) {
         setActiveCommercialId(null);
       }
+      setDbNotice(`Deleted "${title || 'commercial'}"`);
+      setTimeout(() => setDbNotice(null), 3000);
     } catch (err) {
       console.error('Failed to delete commercial:', err);
     }
@@ -242,8 +278,9 @@ export default function App() {
   // History of generated takes
   const [takes, setTakes] = useState<GeneratedCommercial[]>([]);
 
-  // Navigation tabs for smaller screens or switching views
-  const [activeTab, setActiveTab] = useState<'studio' | 'tasks'>('studio');
+  // Multi-page navigation state: clean, decongested, focused views
+  type AppPage = 'script' | 'video' | 'storyboard' | 'archive' | 'tasks';
+  const [activePage, setActivePage] = useState<AppPage>('script');
 
   const selectedVoiceObj = VOICE_OPTIONS.find((v) => v.id === selectedVoice) || VOICE_OPTIONS[0];
 
@@ -401,31 +438,87 @@ export default function App() {
               <span className="hidden lg:inline">Push to GitHub</span>
             </button>
 
-            {/* Tab toggle */}
+            {/* Multi-Page Navigation Tabs */}
             <div className="flex items-center gap-1 bg-[#F4EEE2] p-1 rounded-xl border border-[#EAE3D4] text-xs">
               <button
-                id="tab-studio-btn"
-                onClick={() => setActiveTab('studio')}
+                type="button"
+                id="tab-script-btn"
+                onClick={() => setActivePage('script')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeTab === 'studio'
+                  activePage === 'script'
+                    ? 'bg-[#E8A317] text-[#181614] shadow-xs font-bold'
+                    : 'text-[#6B6256] hover:text-[#181614]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Script & Voice</span>
+                <span className="sm:hidden">Script</span>
+              </button>
+
+              <button
+                type="button"
+                id="tab-video-btn"
+                onClick={() => setActivePage('video')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                  activePage === 'video'
                     ? 'bg-[#E8A317] text-[#181614] shadow-xs font-bold'
                     : 'text-[#6B6256] hover:text-[#181614]'
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                4:5 Video Studio
+                <span className="hidden sm:inline">Video Studio</span>
+                <span className="sm:hidden">Video</span>
+                {activeCommercial && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                )}
               </button>
+
               <button
-                id="tab-tasks-btn"
-                onClick={() => setActiveTab('tasks')}
+                type="button"
+                id="tab-storyboard-btn"
+                onClick={() => setActivePage('storyboard')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activeTab === 'tasks'
+                  activePage === 'storyboard'
+                    ? 'bg-[#E8A317] text-[#181614] shadow-xs font-bold'
+                    : 'text-[#6B6256] hover:text-[#181614]'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Storyboard</span>
+                <span className="text-[10px] bg-white/80 px-1 py-0.2 rounded font-mono font-bold">8</span>
+              </button>
+
+              <button
+                type="button"
+                id="tab-archive-btn"
+                onClick={() => setActivePage('archive')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                  activePage === 'archive'
+                    ? 'bg-[#E8A317] text-[#181614] shadow-xs font-bold'
+                    : 'text-[#6B6256] hover:text-[#181614]'
+                }`}
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-[#C6860C]" />
+                <span className="hidden md:inline">Saved Ads</span>
+                {savedCommercials.length > 0 && (
+                  <span className="text-[10px] bg-[#181614] text-white px-1.5 py-0.2 rounded-full font-mono">
+                    {savedCommercials.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                id="tab-tasks-btn"
+                onClick={() => setActivePage('tasks')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                  activePage === 'tasks'
                     ? 'bg-[#E8A317] text-[#181614] shadow-xs font-bold'
                     : 'text-[#6B6256] hover:text-[#181614]'
                 }`}
               >
                 <ListTodo className="w-3.5 h-3.5" />
-                Production Tasks
+                <span className="hidden lg:inline">Tasks</span>
               </button>
             </div>
           </div>
@@ -448,9 +541,13 @@ export default function App() {
                   className="font-bold text-xs sm:text-sm text-[#181614] bg-transparent hover:bg-white/60 focus:bg-white border-b border-transparent focus:border-[#E8A317] px-1 py-0.5 rounded outline-none transition-colors"
                   title="Click to rename commercial title"
                 />
-                {activeCommercialId && (
+                {activeCommercialId ? (
                   <span className="text-[10px] font-mono text-[#6B6256] bg-white/70 px-1.5 py-0.5 rounded border border-[#DACFBE]">
                     Saved in Cloud DB
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-[#C6860C] bg-white/70 px-1.5 py-0.5 rounded border border-[#DACFBE]">
+                    Draft Mode
                   </span>
                 )}
               </div>
@@ -462,7 +559,7 @@ export default function App() {
 
           <div className="flex items-center gap-3 text-xs text-[#6B6256] flex-wrap">
             {dbNotice && (
-              <span className="text-[11px] font-bold text-[#181614] bg-[#E8A317] px-2.5 py-1 rounded-lg animate-in fade-in">
+              <span className="text-[11px] font-bold text-[#181614] bg-[#E8A317] px-2.5 py-1 rounded-lg animate-in fade-in shadow-xs">
                 {dbNotice}
               </span>
             )}
@@ -499,95 +596,55 @@ export default function App() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Left Column (Main Studio Controls & Active Audio) */}
-          <div className={`space-y-6 ${activeTab === 'studio' ? 'lg:col-span-7' : 'hidden lg:block lg:col-span-7'}`}>
-            {/* 1. Active Audio & Video Player (With Live Preview Mode) */}
-            <div className="space-y-3">
-              {/* Mode Selector between 4:5 Social Video and Radio Jingle */}
-              <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-[#EAE3D4] shadow-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-[#181614] ml-2">Preview Mode:</span>
-                  <div className="flex bg-[#F4EEE2] p-1 rounded-lg text-xs">
-                    <button
-                      type="button"
-                      id="mode-video-overlay-btn"
-                      onClick={() => setPlayerMode('video_overlay')}
-                      className={`flex items-center gap-1 px-3 py-1 rounded-md font-semibold transition-all cursor-pointer ${
-                        playerMode === 'video_overlay'
-                          ? 'bg-[#E8A317] text-[#181614] shadow-xs'
-                          : 'text-[#6B6256] hover:text-[#181614]'
-                      }`}
-                    >
-                      <Smartphone className="w-3.5 h-3.5" />
-                      📱 Social Video Player ({aspectRatio})
-                    </button>
-                    <button
-                      type="button"
-                      id="mode-radio-jingle-btn"
-                      onClick={() => setPlayerMode('radio_jingle')}
-                      className={`flex items-center gap-1 px-3 py-1 rounded-md font-semibold transition-all cursor-pointer ${
-                        playerMode === 'radio_jingle'
-                          ? 'bg-[#E8A317] text-[#181614] shadow-xs'
-                          : 'text-[#6B6256] hover:text-[#181614]'
-                      }`}
-                    >
-                      <Radio className="w-3.5 h-3.5" />
-                      📻 Radio Jingle Mode (Retained)
-                    </button>
+        {/* PAGE 1: SCRIPT & VOICE STUDIO */}
+        {activePage === 'script' && (
+          <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
+            {/* Audio Bridge Notice */}
+            {activeCommercial ? (
+              <div className="bg-emerald-50 border border-emerald-300 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
+                    🎙️
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-950">
+                      Voiceover Audio Ready ({Math.round(activeCommercial.duration)}s)
+                    </h4>
+                    <p className="text-[11px] text-emerald-700">
+                      Narrator: {activeCommercial.voiceName} • {activeCommercial.style.replace('_', ' ')}
+                    </p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 mr-2">
-                  {activeCommercial ? (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-[#E8A317] text-[#181614]">
-                      🎙️ Audio Recorded
-                    </span>
-                  ) : (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-[#F4EEE2] text-[#6B6256] border border-[#EAE3D4]">
-                      👁️ Storyboard Preview Mode
-                    </span>
-                  )}
+                <button
+                  type="button"
+                  onClick={() => setActivePage('video')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Open in Video Studio</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <div className="bg-[#FBF8F1] border border-[#EAE3D4] p-3.5 rounded-2xl flex items-center justify-between gap-3 text-xs text-[#6B6256]">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#E8A317]" />
+                  <span>Ready to voice this script? Click below to generate authentic Pidgin studio audio.</span>
                 </div>
               </div>
+            )}
 
-              {playerMode === 'video_overlay' ? (
-                <SocialVideoOverlay
-                  audioUrl={activeCommercial?.audioUrl}
-                  duration={activeCommercial?.duration || 32}
-                  script={script}
-                  voiceName={activeCommercial?.voiceName || selectedVoiceObj.name}
-                  style={activeCommercial?.style || selectedStyle}
-                  scenes={scenes}
-                  externalSceneIndex={activeSceneIndex}
-                  sceneVersion={sceneVersion}
-                  onSceneChange={handleSceneChange}
-                  onGenerateAudioClick={handleGenerateAudio}
-                  isGeneratingAudio={isGenerating}
-                  isScriptOutOfSync={isScriptOutOfSync}
-                  aspectRatio={aspectRatio}
-                  onAspectRatioChange={setAspectRatio}
-                />
-              ) : (
-                <AudioVisualizer
-                  audioUrl={activeCommercial?.audioUrl || ''}
-                  duration={activeCommercial?.duration || 32}
-                  script={script}
-                  voiceName={activeCommercial?.voiceName || selectedVoiceObj.name}
-                  style={activeCommercial?.style || selectedStyle}
-                />
-              )}
+            {/* Script Editor */}
+            <div id="script-editor-section">
+              <ScriptEditor
+                script={script}
+                onChangeScript={setScript}
+                onApplyPreset={handleApplyPreset}
+              />
             </div>
 
-            {/* 2. Script Editor */}
-            <ScriptEditor
-              script={script}
-              onChangeScript={setScript}
-              onApplyPreset={handleApplyPreset}
-            />
-
-            {/* 3. Voice & Delivery Style Selection */}
-            <div className="bg-white rounded-2xl border border-[#EAE3D4] shadow-sm p-6">
+            {/* Voice & Delivery Style Selection */}
+            <div className="bg-white rounded-3xl border border-[#EAE3D4] shadow-sm p-6 sm:p-7">
               <VoiceSelector
                 selectedVoice={selectedVoice}
                 onSelectVoice={setSelectedVoice}
@@ -633,15 +690,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* 4. Audio Takes History */}
+            {/* Audio Takes History */}
             {takes.length > 1 && (
-              <div className="bg-white rounded-2xl border border-[#EAE3D4] shadow-sm p-6 space-y-3">
+              <div className="bg-white rounded-3xl border border-[#EAE3D4] shadow-sm p-6 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[#6B6256] flex items-center gap-1.5">
                     <History className="w-3.5 h-3.5 text-[#E8A317]" />
-                    Previous Audio Takes ({takes.length})
+                    Session Audio Takes ({takes.length})
                   </h4>
-                  <span className="text-[11px] text-[#6B6256]">Click to preview in video player</span>
+                  <span className="text-[11px] text-[#6B6256]">Click to preview in video simulator</span>
                 </div>
 
                 <div className="space-y-2">
@@ -650,7 +707,7 @@ export default function App() {
                     return (
                       <div
                         key={take.id}
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                        className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
                           isCurrent
                             ? 'bg-[#FBF8F1] border-[#E8A317] font-medium ring-1 ring-[#E8A317]'
                             : 'bg-white border-[#EAE3D4] hover:bg-[#F4EEE2]'
@@ -658,11 +715,14 @@ export default function App() {
                       >
                         <div className="flex items-center gap-3">
                           <button
-                            onClick={() => setActiveCommercial(take)}
-                            className="p-1.5 rounded-lg bg-[#F4EEE2] hover:bg-[#E8A317] text-[#181614] cursor-pointer"
+                            onClick={() => {
+                              setActiveCommercial(take);
+                              setActivePage('video');
+                            }}
+                            className="p-2 rounded-xl bg-[#F4EEE2] hover:bg-[#E8A317] text-[#181614] cursor-pointer"
                             title="Play this take in video simulator"
                           >
-                            <Play className="w-3.5 h-3.5" />
+                            <Play className="w-3.5 h-3.5 fill-current" />
                           </button>
                           <div>
                             <div className="text-xs font-bold text-[#181614]">
@@ -677,7 +737,7 @@ export default function App() {
                         <a
                           href={take.audioUrl}
                           download={`legit-africa-${take.voiceName.toLowerCase()}.wav`}
-                          className="p-1.5 text-[#6B6256] hover:text-[#181614] rounded-lg"
+                          className="p-2 text-[#6B6256] hover:text-[#181614] rounded-xl hover:bg-[#F4EEE2]"
                           title="Download take WAV"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -689,13 +749,98 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
 
-          {/* Right Column (Google Tasks & Creative Brief Storyboard Reference) */}
-          <div className={`space-y-6 ${activeTab === 'tasks' ? 'lg:col-span-5' : 'hidden lg:block lg:col-span-5'}`}>
-            {/* Google Tasks Panel */}
-            <GoogleTasksPanel currentCommercialTitle="Legit Africa 4:5 Social Video" />
+        {/* PAGE 2: VIDEO STUDIO */}
+        {activePage === 'video' && (
+          <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-200">
+            {/* Top Bar for Video Studio */}
+            <div className="flex flex-wrap items-center justify-between bg-white p-3 rounded-2xl border border-[#EAE3D4] shadow-xs gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[#181614] ml-2">Preview Mode:</span>
+                <div className="flex bg-[#F4EEE2] p-1 rounded-xl text-xs">
+                  <button
+                    type="button"
+                    id="mode-video-overlay-btn"
+                    onClick={() => setPlayerMode('video_overlay')}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                      playerMode === 'video_overlay'
+                        ? 'bg-[#E8A317] text-[#181614] shadow-xs'
+                        : 'text-[#6B6256] hover:text-[#181614]'
+                    }`}
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                    📱 Social Video ({aspectRatio})
+                  </button>
+                  <button
+                    type="button"
+                    id="mode-radio-jingle-btn"
+                    onClick={() => setPlayerMode('radio_jingle')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
+                      playerMode === 'radio_jingle'
+                        ? 'bg-[#E8A317] text-[#181614] shadow-xs'
+                        : 'text-[#6B6256] hover:text-[#181614]'
+                    }`}
+                  >
+                    <Radio className="w-3.5 h-3.5" />
+                    📻 Radio Jingle Mode
+                  </button>
+                </div>
+              </div>
 
-            {/* Interactive Creative Brief & Storyboard Studio */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivePage('script')}
+                  className="px-3 py-1.5 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] font-semibold text-xs border border-[#EAE3D4] transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#E8A317]" />
+                  <span>Edit Script</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActivePage('storyboard')}
+                  className="px-3 py-1.5 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] font-semibold text-xs border border-[#EAE3D4] transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Layers className="w-3.5 h-3.5 text-[#E8A317]" />
+                  <span>Edit Storyboard (8)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Video Player or Visualizer */}
+            {playerMode === 'video_overlay' ? (
+              <SocialVideoOverlay
+                audioUrl={activeCommercial?.audioUrl}
+                duration={activeCommercial?.duration || 32}
+                script={script}
+                voiceName={activeCommercial?.voiceName || selectedVoiceObj.name}
+                style={activeCommercial?.style || selectedStyle}
+                scenes={scenes}
+                externalSceneIndex={activeSceneIndex}
+                sceneVersion={sceneVersion}
+                onSceneChange={handleSceneChange}
+                onGenerateAudioClick={handleGenerateAudio}
+                isGeneratingAudio={isGenerating}
+                isScriptOutOfSync={isScriptOutOfSync}
+                aspectRatio={aspectRatio}
+                onAspectRatioChange={setAspectRatio}
+              />
+            ) : (
+              <AudioVisualizer
+                audioUrl={activeCommercial?.audioUrl || ''}
+                duration={activeCommercial?.duration || 32}
+                script={script}
+                voiceName={activeCommercial?.voiceName || selectedVoiceObj.name}
+                style={activeCommercial?.style || selectedStyle}
+              />
+            )}
+          </div>
+        )}
+
+        {/* PAGE 3: VISUAL STORYBOARD */}
+        {activePage === 'storyboard' && (
+          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-200">
             <StoryboardEditor
               scenes={scenes}
               activeSceneIndex={activeSceneIndex}
@@ -705,9 +850,37 @@ export default function App() {
               onResetScenes={() => handleUpdateScenes(ADVERT_SCENES)}
               onGenerateAudio={handleGenerateAudio}
               isGeneratingAudio={isGenerating}
+              onGenerateScenesFromCurrentScript={handleGenerateScenesFromCurrentScript}
             />
           </div>
-        </div>
+        )}
+
+        {/* PAGE 4: HISTORY & SAVED ADS */}
+        {activePage === 'archive' && (
+          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-200">
+            <CampaignArchiveView
+              savedCommercials={savedCommercials}
+              activeCommercialId={activeCommercialId}
+              onLoadCommercial={handleLoadSavedCommercial}
+              onDuplicateCommercial={handleDuplicateCommercial}
+              onDeleteCommercial={handleDeleteSavedCommercial}
+              onNewCommercial={handleNewCommercial}
+              takes={takes}
+              onSelectTake={(take) => {
+                setActiveCommercial(take);
+                setActivePage('video');
+              }}
+              activeTakeId={activeCommercial?.id}
+            />
+          </div>
+        )}
+
+        {/* PAGE 5: TASKS & DISPATCH */}
+        {activePage === 'tasks' && (
+          <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
+            <GoogleTasksPanel currentCommercialTitle={campaignTitle} />
+          </div>
+        )}
       </main>
 
       {/* Footer */}
@@ -807,6 +980,13 @@ git push -u origin main`}
         onNewCommercial={handleNewCommercial}
         isSaving={isSavingDb}
         currentTitle={campaignTitle}
+      />
+
+      {/* New Commercial Creation & AI Wizard Modal */}
+      <NewCommercialModal
+        isOpen={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        onCreateCommercial={handleCreateCommercialFromModal}
       />
     </div>
   );
