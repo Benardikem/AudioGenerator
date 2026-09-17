@@ -16,11 +16,26 @@ export function generateScenesFromScript(
 
   // Determine scenario context from text
   const lower = cleanScript.toLowerCase();
-  const isPhoneTech = lower.includes('phone') || lower.includes('gadget') || lower.includes('computer village') || lower.includes('battery');
-  const isTailorFashion = lower.includes('tailor') || lower.includes('cloth') || lower.includes('wedding') || lower.includes('ankara') || lower.includes('sew');
-  const isSocial = lower.includes('instagram') || lower.includes('dm') || lower.includes('social') || lower.includes('blocked') || lower.includes('dispatch');
-  const isHousing = lower.includes('landlord') || lower.includes('agent') || lower.includes('rent') || lower.includes('house') || lower.includes('housing') || lower.includes('apartment') || lower.includes('tenant') || lower.includes('caution') || lower.includes('inspection');
-  const isAuto = lower.includes('car') || lower.includes('mechanic') || lower.includes('tokunbo') || lower.includes('mileage') || lower.includes('engine');
+  // Pick the scenario with the most matching words. Whole words only: substring checks sent
+  // "different" and "current" to housing (they contain "rent") and "card" or "care" to cars.
+  // Counting instead of taking the first hit matters because scripts mention everyday things
+  // across topics: a landlord script says "agent no dey pick phone", which must not become a
+  // phone-shop storyboard just because phones were checked first.
+  const SCENARIO_WORDS = {
+    phoneTech: /\b(phones?|gadgets?|computer village|battery|laptops?|iphone|samsung)\b/g,
+    tailorFashion: /\b(tailors?|cloth(es)?|wedding|ankara|sew(ing)?|aso ebi)\b/g,
+    housing: /\b(landlords?|agents?|rent(ed|ing|s)?|house|housing|apartments?|tenants?|caution (fee|deposit)|inspection)\b/g,
+    auto: /\b(cars?|mechanics?|tokunbo|mileage|engine)\b/g,
+  };
+  const scores = Object.fromEntries(
+    Object.entries(SCENARIO_WORDS).map(([name, re]) => [name, (lower.match(re) || []).length])
+  ) as Record<keyof typeof SCENARIO_WORDS, number>;
+  const best = (Object.keys(scores) as (keyof typeof scores)[]).reduce((a, b) => (scores[b] > scores[a] ? b : a));
+  const scenario = scores[best] > 0 ? best : 'general';
+  const isPhoneTech = scenario === 'phoneTech';
+  const isTailorFashion = scenario === 'tailorFashion';
+  const isHousing = scenario === 'housing';
+  const isAuto = scenario === 'auto';
 
   // Split lines into 8 beats
   let voiceLines: string[] = [];
