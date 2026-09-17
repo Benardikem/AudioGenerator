@@ -179,12 +179,19 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
                   rows={3}
-                  placeholder={'One line per row. Each row flies in after the one before.\nPut a word in *stars* to make it gold.'}
+                  placeholder="Type your headline here"
                   className="w-full p-3 text-sm bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614] font-semibold"
                 />
-                <p className="text-[11px] text-[#6B6256] mt-1">
-                  Example: <span className="font-mono">Before you pay any agent,</span> / <span className="font-mono">*search am first.*</span>
+                <p className="text-[11px] text-[#6B6256] mt-1.5 leading-relaxed">
+                  One row per line; each row flies in after the one before. Put a word in{' '}
+                  <span className="font-mono font-semibold text-[#181614]">*stars*</span> to make it gold, e.g.
                 </p>
+                <div className="mt-1.5 rounded-lg bg-white border border-[#EAE3D4] px-3 py-2 text-xs font-semibold text-[#181614] leading-snug font-mono">
+                  <div>Three hundred thousand naira.</div>
+                  <div>
+                    <span className="text-[#C6860C]">*Gone*</span> in one Saturday.
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-[#181614] mb-1">Background</label>
