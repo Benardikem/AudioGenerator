@@ -48,10 +48,41 @@ function getGeminiClient(): GoogleGenAI {
  * a raw JSON error or, worse, a silent stand-in result.
  */
 const VOICE_MODELS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
+const TEXT_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite"];
 
 /** A free-tier daily allowance being used up, as opposed to a short burst limit or a real fault. */
 function isDailyLimit(error: any) {
   return /PerDay|free_tier_requests/i.test(String(error?.message ?? error ?? ""));
+}
+
+/** Temporary high demand, unavailable, or rate limit spikes that can recover with an alternative model. */
+function isTransientFailure(error: any) {
+  const raw = String(error?.message ?? error ?? "");
+  return /\b503\b|UNAVAILABLE|high demand|overloaded|spikes in demand|RESOURCE_EXHAUSTED|\b429\b/i.test(raw);
+}
+
+async function generateTextWithFallback(
+  ai: GoogleGenAI,
+  params: { contents: string; config?: any }
+) {
+  let response: any;
+  let usedModel = TEXT_MODELS[0];
+  for (let i = 0; i < TEXT_MODELS.length; i++) {
+    usedModel = TEXT_MODELS[i];
+    try {
+      response = await ai.models.generateContent({
+        model: usedModel,
+        contents: params.contents,
+        config: params.config,
+      });
+      return { response, usedModel };
+    } catch (err: any) {
+      const lastModel = i === TEXT_MODELS.length - 1;
+      if (lastModel || !isTransientFailure(err)) throw err;
+      console.warn(`[text-gen] ${usedModel} temporary spike or limit reached, falling back to ${TEXT_MODELS[i + 1]}`);
+    }
+  }
+  return { response, usedModel };
 }
 
 function geminiError(error: any, fallback: string): { status: number; message: string } {
@@ -73,6 +104,9 @@ function geminiError(error: any, fallback: string): { status: number; message: s
   }
   if (/RESOURCE_EXHAUSTED|\b429\b|quota|rate limit/i.test(raw)) {
     return { status: 429, message: "Gemini's usage limit was reached. Wait a minute and try again." };
+  }
+  if (/\b503\b|UNAVAILABLE|high demand|overloaded/i.test(raw)) {
+    return { status: 503, message: "Gemini is currently experiencing high demand. Please try again in a few moments." };
   }
   if (/API key not valid|API_KEY_INVALID|PERMISSION_DENIED/i.test(raw)) {
     return { status: 502, message: "Gemini rejected the API key set on the server." };
@@ -316,8 +350,7 @@ ${originalScript}
 
 Return ONLY the final spoken voiceover script. Do not include sound effects in brackets like [Music plays], do not include stage directions, speaker names, or meta commentary. Return clean, ready-to-speak text formatted in short readable lines.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+    const { response } = await generateTextWithFallback(ai, {
       contents: prompt,
     });
 
@@ -388,9 +421,8 @@ Output ONLY valid JSON without Markdown blocks or extra text:
   ]
 }`;
 
-    // gemini-2.5-flash and gemini-2.0-flash, used here before, have been retired by Google.
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+    // On demand spikes (503) or rate limits, falls back to gemini-3.1-flash-lite
+    const { response, usedModel } = await generateTextWithFallback(ai, {
       contents: prompt,
       config: {
         responseMimeType: "application/json",
