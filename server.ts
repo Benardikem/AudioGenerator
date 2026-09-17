@@ -6,11 +6,15 @@ import { spawn } from "child_process";
 import dotenv from "dotenv";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { installAuth } from "./auth";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Login first: every route registered after this needs a signed-in session.
+installAuth(app);
 
 app.use(express.json({ limit: "10mb" }));
 
