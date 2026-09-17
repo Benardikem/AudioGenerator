@@ -475,21 +475,6 @@ export default function App() {
 
               <button
                 type="button"
-                id="tab-storyboard-btn"
-                onClick={() => setActivePage('storyboard')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
-                  activePage === 'storyboard'
-                    ? 'bg-[#E8A317] text-[#181614] shadow-xs font-bold'
-                    : 'text-[#6B6256] hover:text-[#181614]'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Storyboard</span>
-                <span className="text-[10px] bg-white/80 px-1 py-0.2 rounded font-mono font-bold">8</span>
-              </button>
-
-              <button
-                type="button"
                 id="tab-archive-btn"
                 onClick={() => setActivePage('archive')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer ${
@@ -839,8 +824,48 @@ export default function App() {
         )}
 
         {/* PAGE 3: VISUAL STORYBOARD */}
-        {activePage === 'storyboard' && (
+        {activePage === 'storyboard' && (() => {
+          // The storyboard belongs to the ad that's open. Show which one, and whether its
+          // boards match what's saved, so it never looks like a free-floating set of scenes.
+          const savedAd = savedCommercials.find((c) => c.id === activeCommercialId);
+          const status = !activeCommercialId || !savedAd
+            ? 'unsaved'
+            : savedAd.scenes === JSON.stringify(scenes)
+              ? 'saved'
+              : 'changed';
+          return (
           <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl border border-[#EAE3D4] px-5 py-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-[#C6860C]">
+                  <Layers className="w-3.5 h-3.5 text-[#E8A317]" />
+                  <span>Storyboard for</span>
+                </div>
+                <h2 className="text-base font-bold text-[#181614] truncate">{campaignTitle}</h2>
+                <p className={`text-xs mt-0.5 ${status === 'saved' ? 'text-emerald-700' : 'text-[#C6860C]'}`}>
+                  {status === 'saved' && 'All changes saved'}
+                  {status === 'changed' && 'You have unsaved changes to these boards'}
+                  {status === 'unsaved' && 'This ad isn\'t saved yet. Save it to keep this storyboard.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivePage('archive')}
+                  className="px-3 py-1.5 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] font-semibold text-xs border border-[#EAE3D4] transition-all cursor-pointer"
+                >
+                  Back to Saved Ads
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveCurrentCommercial(campaignTitle)}
+                  disabled={isSavingDb || status === 'saved'}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#E8A317] hover:bg-[#C6860C] disabled:opacity-50 disabled:cursor-default text-[#181614] font-bold text-xs transition-all cursor-pointer"
+                >
+                  {isSavingDb ? 'Saving...' : 'Save storyboard'}
+                </button>
+              </div>
+            </div>
             <StoryboardEditor
               scenes={scenes}
               activeSceneIndex={activeSceneIndex}
@@ -853,7 +878,8 @@ export default function App() {
               onGenerateScenesFromCurrentScript={handleGenerateScenesFromCurrentScript}
             />
           </div>
-        )}
+          );
+        })()}
 
         {/* PAGE 4: HISTORY & SAVED ADS */}
         {activePage === 'archive' && (
@@ -862,6 +888,10 @@ export default function App() {
               savedCommercials={savedCommercials}
               activeCommercialId={activeCommercialId}
               onLoadCommercial={handleLoadSavedCommercial}
+              onOpenStoryboard={(comm) => {
+                handleLoadSavedCommercial(comm);
+                setActivePage('storyboard');
+              }}
               onDuplicateCommercial={handleDuplicateCommercial}
               onDeleteCommercial={handleDeleteSavedCommercial}
               onNewCommercial={handleNewCommercial}
