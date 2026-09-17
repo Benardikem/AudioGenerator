@@ -1,63 +1,14 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  query,
-  orderBy,
-  onSnapshot,
-} from 'firebase/firestore';
-import { db, auth } from './firebase';
-import { AdvertScene } from '../types';
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map((provider) => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || [],
-    },
-    operationType,
-    path,
-  };
-  console.error('Firestore Error:', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+/**
+ * DO NOT SWITCH THIS BACK TO FIRESTORE. See GEMINI.md.
+ *
+ * Saved commercials live in the studio's own PostgreSQL database, reached through the server's
+ * /api/commercials routes (commercialsStore.ts). Firestore failed on both counts that matter:
+ * the AI Studio database refuses requests from studio.legitafrica.com, and its 1 MB document
+ * limit is smaller than a 30-second voiceover.
+ *
+ * The exported functions and CommercialRecord keep the shape the Firestore version had, so the
+ * rest of the app didn't need to change.
+ */
 
 export interface CommercialRecord {
   id: string;
@@ -67,6 +18,7 @@ export interface CommercialRecord {
   voiceName?: string;
   timbre?: 'standard' | 'baritone' | 'bass';
   style: string;
+  /** A data URL straight after generation; /api/commercials/:id/audio once saved. */
   audioUrl?: string;
   duration?: number;
   scenes?: string; // JSON string of AdvertScene[]
@@ -75,66 +27,58 @@ export interface CommercialRecord {
   updatedAt?: string;
 }
 
-const COLLECTION_NAME = 'commercials';
-
-/**
- * Fetch all saved commercials from Firestore, ordered by most recently updated
- */
-export async function getSavedCommercials(): Promise<CommercialRecord[]> {
-  try {
-    const q = query(collection(db, COLLECTION_NAME));
-    const snapshot = await getDocs(q);
-    const records: CommercialRecord[] = [];
-    snapshot.forEach((d) => {
-      records.push({ id: d.id, ...d.data() } as CommercialRecord);
-    });
-    // Sort descending by updatedAt or createdAt
-    return records.sort((a, b) => {
-      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
-      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
-      return timeB - timeA;
-    });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, { credentials: 'same-origin', ...init });
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      message = (await res.json()).error || message;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(message);
   }
+  return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
-/**
- * Subscribe to real-time changes of saved commercials
- */
+// Firestore pushed changes to subscribers on its own. Without it, anything that saves or
+// deletes tells the open subscriptions to reload, and a slow poll picks up other tabs.
+const listeners = new Set<() => void>();
+const notify = () => listeners.forEach((reload) => reload());
+
+/** All saved commercials, most recently updated first. */
+export function getSavedCommercials(): Promise<CommercialRecord[]> {
+  return api<CommercialRecord[]>('/api/commercials');
+}
+
+/** Calls onUpdate now and whenever the saved list changes. Returns an unsubscribe function. */
 export function subscribeToSavedCommercials(
   onUpdate: (commercials: CommercialRecord[]) => void,
   onError?: (err: Error) => void
 ) {
-  try {
-    const q = query(collection(db, COLLECTION_NAME));
-    return onSnapshot(
-      q,
-      (snapshot) => {
-        const records: CommercialRecord[] = [];
-        snapshot.forEach((d) => {
-          records.push({ id: d.id, ...d.data() } as CommercialRecord);
-        });
-        records.sort((a, b) => {
-          const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
-          const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
-          return timeB - timeA;
-        });
-        onUpdate(records);
-      },
-      (error) => {
-        if (onError) onError(error);
-        handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
-      }
-    );
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, COLLECTION_NAME);
-  }
+  let stopped = false;
+  const reload = () => {
+    getSavedCommercials()
+      .then((records) => {
+        if (!stopped) onUpdate(records);
+      })
+      .catch((err) => {
+        if (!stopped && onError) onError(err);
+      });
+  };
+
+  reload();
+  listeners.add(reload);
+  const poll = setInterval(reload, 30_000);
+
+  return () => {
+    stopped = true;
+    listeners.delete(reload);
+    clearInterval(poll);
+  };
 }
 
-/**
- * Save or update a commercial campaign in the database
- */
+/** Save or update a commercial. Returns the stored record, with its saved audio URL. */
 export async function saveCommercial(
   record: Omit<CommercialRecord, 'id' | 'createdAt' | 'updatedAt'> & {
     id?: string;
@@ -142,31 +86,18 @@ export async function saveCommercial(
     updatedAt?: string;
   }
 ): Promise<CommercialRecord> {
-  const docId = record.id || `comm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const now = new Date().toISOString();
-
-  const payload: CommercialRecord = {
-    ...record,
-    id: docId,
-    createdAt: record.createdAt || now,
-    updatedAt: now,
-  };
-
-  try {
-    await setDoc(doc(db, COLLECTION_NAME, docId), payload);
-    return payload;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${COLLECTION_NAME}/${docId}`);
-  }
+  const id = record.id || `comm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const saved = await api<CommercialRecord>(`/api/commercials/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...record, id, createdAt: record.createdAt || new Date().toISOString() }),
+  });
+  notify();
+  return saved;
 }
 
-/**
- * Delete a commercial campaign by its ID
- */
+/** Delete a commercial by its ID. */
 export async function deleteCommercial(id: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, COLLECTION_NAME, id));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${COLLECTION_NAME}/${id}`);
-  }
+  await api<void>(`/api/commercials/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  notify();
 }

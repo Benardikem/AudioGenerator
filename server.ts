@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { installAuth } from "./auth";
+import { installCommercialsApi } from "./commercialsStore";
 
 dotenv.config();
 
@@ -19,6 +20,9 @@ const PORT = 3000;
 installAuth(app);
 
 app.use(express.json({ limit: "10mb" }));
+
+// DO NOT REMOVE. Saved commercials (Postgres). Must stay after installAuth. See GEMINI.md.
+installCommercialsApi(app);
 
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {

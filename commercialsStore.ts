@@ -1,0 +1,323 @@
+import type { Express, Request, Response } from "express";
+import pg from "pg";
+
+/**
+ * DO NOT REMOVE OR SWITCH BACK TO FIRESTORE. See GEMINI.md.
+ *
+ * Saved commercials, kept in the studio's own PostgreSQL database on the server.
+ *
+ * Firestore couldn't do this job: the database AI Studio provisions refuses requests from
+ * studio.legitafrica.com, and a Firestore document is capped at 1 MB while a 30-second
+ * voiceover is about 1.8 MB as a data URL. Here the audio is stored as bytes in its own column
+ * and served from /api/commercials/:id/audio, so listing commercials stays light and a saved
+ * take plays like any other audio file.
+ *
+ * Every route here sits behind the login in auth.ts (installAuth runs first in server.ts).
+ * Without DATABASE_URL — local and AI Studio previews — it falls back to an in-memory store
+ * that forgets everything on restart. In production DATABASE_URL is required.
+ */
+
+type Timbre = "standard" | "baritone" | "bass";
+
+interface RecordBody {
+  title: string;
+  script: string;
+  voice: string;
+  voiceName?: string;
+  timbre?: Timbre;
+  style: string;
+  duration?: number;
+  scenes?: string;
+  aspectRatio?: string;
+}
+
+interface Audio {
+  bytes: Buffer;
+  mime: string;
+}
+
+interface Row {
+  id: string;
+  title: string;
+  record: RecordBody;
+  hasAudio: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** undefined = leave the stored audio as it is; null = remove it. */
+type AudioChange = Audio | null | undefined;
+
+interface Store {
+  list(): Promise<Row[]>;
+  get(id: string): Promise<Row | null>;
+  upsert(id: string, record: RecordBody, audio: AudioChange, createdAt: Date): Promise<Row>;
+  remove(id: string): Promise<void>;
+  audio(id: string): Promise<Audio | null>;
+}
+
+const ID = /^[A-Za-z0-9_-]{1,128}$/;
+const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+
+export function installCommercialsApi(app: Express) {
+  const store = createStore();
+
+  app.get("/api/commercials", route(async (_req, res) => {
+    res.json((await store.list()).map(toClient));
+  }));
+
+  app.get("/api/commercials/:id", route(async (req, res) => {
+    const row = ID.test(req.params.id) ? await store.get(req.params.id) : null;
+    if (!row) return res.status(404).json({ error: "Commercial not found." });
+    res.json(toClient(row));
+  }));
+
+  app.put("/api/commercials/:id", route(async (req, res) => {
+    const id = req.params.id;
+    if (!ID.test(id)) return res.status(400).json({ error: "Invalid commercial id." });
+
+    const parsed = parseRecord(req.body);
+    if (typeof parsed === "string") return res.status(400).json({ error: parsed });
+
+    const audio = await resolveAudio(store, id, req.body?.audioUrl);
+    if (typeof audio === "string") return res.status(400).json({ error: audio });
+
+    const created = new Date(req.body?.createdAt);
+    const row = await store.upsert(id, parsed, audio, isNaN(created.getTime()) ? new Date() : created);
+    res.json(toClient(row));
+  }));
+
+  app.delete("/api/commercials/:id", route(async (req, res) => {
+    if (ID.test(req.params.id)) await store.remove(req.params.id);
+    res.status(204).end();
+  }));
+
+  app.get("/api/commercials/:id/audio", route(async (req, res) => {
+    const audio = ID.test(req.params.id) ? await store.audio(req.params.id) : null;
+    if (!audio) return res.status(404).json({ error: "No audio saved for this commercial." });
+    sendAudio(req, res, audio);
+  }));
+}
+
+function toClient(row: Row) {
+  return {
+    ...row.record,
+    id: row.id,
+    title: row.title,
+    // A real URL rather than a data URL: <audio> and fetch() both accept it, and the
+    // version stamp stops a browser replaying a cached take after it's been replaced.
+    audioUrl: row.hasAudio ? `/api/commercials/${row.id}/audio?v=${row.updatedAt.getTime()}` : undefined,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/** Same limits the Firestore rules enforced, so nothing that saved before is rejected now. */
+function parseRecord(b: any): RecordBody | string {
+  const str = (v: unknown, max: number, min = 0) => typeof v === "string" && v.length >= min && v.length <= max;
+  if (!str(b?.title, 200, 1)) return "Title is required (up to 200 characters).";
+  if (!str(b?.script, 10_000, 1)) return "Script is required (up to 10,000 characters).";
+  if (!str(b?.voice, 100)) return "Invalid voice.";
+  if (!str(b?.style, 100)) return "Invalid style.";
+  if (b.voiceName !== undefined && !str(b.voiceName, 100)) return "Invalid voice name.";
+  if (b.timbre !== undefined && !["standard", "baritone", "bass"].includes(b.timbre)) return "Invalid timbre.";
+  if (b.duration !== undefined && typeof b.duration !== "number") return "Invalid duration.";
+  if (b.scenes !== undefined && !str(b.scenes, 500_000)) return "Scenes are too large.";
+  if (b.aspectRatio !== undefined && !str(b.aspectRatio, 10)) return "Invalid aspect ratio.";
+
+  return {
+    title: b.title,
+    script: b.script,
+    voice: b.voice,
+    style: b.style,
+    ...(b.voiceName !== undefined && { voiceName: b.voiceName }),
+    ...(b.timbre !== undefined && { timbre: b.timbre }),
+    ...(b.duration !== undefined && { duration: b.duration }),
+    ...(b.scenes !== undefined && { scenes: b.scenes }),
+    ...(b.aspectRatio !== undefined && { aspectRatio: b.aspectRatio }),
+  };
+}
+
+/**
+ * The app sends whatever audioUrl it's holding:
+ * - a data URL, straight from generation → store those bytes
+ * - our own /api/commercials/<id>/audio URL, from a loaded commercial → keep it, or copy it
+ *   across when duplicating into a new id
+ * - nothing → the take was cleared, so remove it
+ */
+async function resolveAudio(store: Store, id: string, url: unknown): Promise<AudioChange | string> {
+  if (url === undefined || url === null || url === "") return null;
+  if (typeof url !== "string") return "Invalid audio.";
+
+  const data = /^data:(audio\/[a-z0-9.+-]+);base64,(.+)$/is.exec(url);
+  if (data) {
+    const bytes = Buffer.from(data[2], "base64");
+    if (bytes.length === 0) return "Audio is empty.";
+    if (bytes.length > MAX_AUDIO_BYTES) return "Audio is too large to save.";
+    return { bytes, mime: data[1].toLowerCase() };
+  }
+
+  const ours = /^\/api\/commercials\/([A-Za-z0-9_-]{1,128})\/audio(?:\?.*)?$/.exec(url);
+  if (ours) {
+    if (ours[1] === id) return undefined;
+    return (await store.audio(ours[1])) ?? null;
+  }
+
+  return "Audio must come from the voiceover generator.";
+}
+
+/** Serves byte ranges, so the audio player can seek without downloading the whole take again. */
+function sendAudio(req: Request, res: Response, audio: Audio) {
+  const total = audio.bytes.length;
+  res.setHeader("Content-Type", audio.mime);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+  if (!range || (range[1] === "" && range[2] === "")) {
+    res.setHeader("Content-Length", total);
+    return res.end(audio.bytes);
+  }
+
+  let start = range[1] === "" ? total - Number(range[2]) : Number(range[1]);
+  let end = range[1] === "" || range[2] === "" ? total - 1 : Number(range[2]);
+  start = Math.max(0, start);
+  end = Math.min(end, total - 1);
+  if (start > end) {
+    res.setHeader("Content-Range", `bytes */${total}`);
+    return res.status(416).end();
+  }
+  res.status(206);
+  res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
+  res.setHeader("Content-Length", end - start + 1);
+  res.end(audio.bytes.subarray(start, end + 1));
+}
+
+function route(handler: (req: Request, res: Response) => Promise<unknown>) {
+  return (req: Request, res: Response) => {
+    handler(req, res).catch((err) => {
+      console.error("[commercials]", err);
+      if (!res.headersSent) res.status(500).json({ error: "Could not reach the studio database." });
+    });
+  };
+}
+
+function createStore(): Store {
+  const url = process.env.DATABASE_URL;
+  if (url) return postgresStore(url);
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("DATABASE_URL is not set. Refusing to start the studio without somewhere to save commercials.");
+  }
+  console.warn("[commercials] DATABASE_URL not set — using an in-memory store that is lost on restart.");
+  return memoryStore();
+}
+
+function postgresStore(connectionString: string): Store {
+  const pool = new pg.Pool({ connectionString, max: 5 });
+
+  let ready: Promise<unknown> | null = null;
+  const init = () =>
+    (ready ??= pool
+      .query(`
+        CREATE TABLE IF NOT EXISTS commercials (
+          id          text PRIMARY KEY,
+          title       text NOT NULL,
+          record      jsonb NOT NULL,
+          audio       bytea,
+          audio_mime  text,
+          created_at  timestamptz NOT NULL DEFAULT now(),
+          updated_at  timestamptz NOT NULL DEFAULT now()
+        )`)
+      .catch((err) => {
+        ready = null; // retry on the next request rather than staying broken
+        throw err;
+      }));
+
+  const COLUMNS = "id, title, record, audio IS NOT NULL AS has_audio, created_at, updated_at";
+  const toRow = (r: any): Row => ({
+    id: r.id,
+    title: r.title,
+    record: r.record,
+    hasAudio: r.has_audio,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  });
+
+  return {
+    async list() {
+      await init();
+      const { rows } = await pool.query(`SELECT ${COLUMNS} FROM commercials ORDER BY updated_at DESC`);
+      return rows.map(toRow);
+    },
+    async get(id) {
+      await init();
+      const { rows } = await pool.query(`SELECT ${COLUMNS} FROM commercials WHERE id = $1`, [id]);
+      return rows[0] ? toRow(rows[0]) : null;
+    },
+    async upsert(id, record, audio, createdAt) {
+      await init();
+      const keep = audio === undefined;
+      const { rows } = await pool.query(
+        `INSERT INTO commercials (id, title, record, audio, audio_mime, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, now())
+         ON CONFLICT (id) DO UPDATE SET
+           title      = EXCLUDED.title,
+           record     = EXCLUDED.record,
+           audio      = CASE WHEN $7 THEN commercials.audio      ELSE EXCLUDED.audio      END,
+           audio_mime = CASE WHEN $7 THEN commercials.audio_mime ELSE EXCLUDED.audio_mime END,
+           updated_at = now()
+         RETURNING ${COLUMNS}`,
+        [id, record.title, record, audio?.bytes ?? null, audio?.mime ?? null, createdAt, keep],
+      );
+      return toRow(rows[0]);
+    },
+    async remove(id) {
+      await init();
+      await pool.query("DELETE FROM commercials WHERE id = $1", [id]);
+    },
+    async audio(id) {
+      await init();
+      const { rows } = await pool.query(
+        "SELECT audio, audio_mime FROM commercials WHERE id = $1 AND audio IS NOT NULL",
+        [id],
+      );
+      return rows[0] ? { bytes: rows[0].audio, mime: rows[0].audio_mime } : null;
+    },
+  };
+}
+
+function memoryStore(): Store {
+  const rows = new Map<string, Row & { audio: Audio | null }>();
+  const strip = ({ audio: _audio, ...row }: Row & { audio: Audio | null }): Row => row;
+
+  return {
+    async list() {
+      return [...rows.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).map(strip);
+    },
+    async get(id) {
+      const r = rows.get(id);
+      return r ? strip(r) : null;
+    },
+    async upsert(id, record, audio, createdAt) {
+      const prev = rows.get(id);
+      const next = {
+        id,
+        title: record.title,
+        record,
+        audio: audio === undefined ? prev?.audio ?? null : audio,
+        hasAudio: false,
+        createdAt: prev?.createdAt ?? createdAt,
+        updatedAt: new Date(),
+      };
+      next.hasAudio = next.audio !== null;
+      rows.set(id, next);
+      return strip(next);
+    },
+    async remove(id) {
+      rows.delete(id);
+    },
+    async audio(id) {
+      return rows.get(id)?.audio ?? null;
+    },
+  };
+}
