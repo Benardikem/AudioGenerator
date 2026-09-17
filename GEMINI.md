@@ -30,7 +30,6 @@ requests from studio.legitafrica.com, and a Firestore document is capped at 1 MB
 30-second voiceover is about 1.8 MB. In preview, saving uses a temporary in-memory store that is
 cleared when the server restarts. That is expected, not a bug to fix by returning to Firestore.
 
-Firebase itself is still used for Google sign-in in the Google Tasks panel. Leave that alone.
 
 If a change seems to require touching any of the above, stop and ask the user first.
 
@@ -39,3 +38,12 @@ If a change seems to require touching any of the above, stop and ask the user fi
 In AI Studio preview and local development, `STUDIO_PASSWORD` is not set, so the login is
 switched off. That is intentional. It does **not** mean the login is unused or safe to remove:
 in production the server refuses to start without it.
+
+## Layout decisions — do not undo
+
+- The app opens on the list of saved ads. Opening or creating an ad shows its name, save status
+  and Save button, then three steps: Script & Voiceover, Storyboard, Preview & Download.
+- **Never generate a voiceover automatically** (for example on page load). Every generation is
+  billed to the Gemini key. Only generate when the user presses the button.
+- The "Push to GitHub" button and modal, the Google Tasks panel, the Campaigns drawer and the
+  top-level Storyboard tab were removed on purpose. Do not add them back.

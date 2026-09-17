@@ -1,8 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import express from "express";
 import crypto from "crypto";
-import fs from "fs";
-import path from "path";
 
 /**
  * DO NOT DELETE, RENAME OR REWRITE THIS FILE. It is required in production. See GEMINI.md.
@@ -125,17 +123,6 @@ export function installAuth(app: Express) {
     }
     res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
   });
-
-  // Add a sign-out button to the app page without touching the React code.
-  if (production) {
-    const indexPath = path.join(process.cwd(), "dist", "index.html");
-    app.get(["/", "/index.html"], (_req, res, next) => {
-      fs.readFile(indexPath, "utf8", (err, html) => {
-        if (err) return next();
-        res.type("html").send(html.replace("</body>", `${SIGN_OUT_BUTTON}</body>`));
-      });
-    });
-  }
 }
 
 function readCookie(req: Request, name: string) {
@@ -163,9 +150,6 @@ function safeNext(value: unknown) {
 function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
-
-const SIGN_OUT_BUTTON = `<form method="post" action="/logout" style="position:fixed;right:14px;bottom:14px;z-index:2147483647;margin:0">
-<button type="submit" style="font:600 13px system-ui,sans-serif;padding:8px 14px;border-radius:999px;border:1px solid #eae3d4;background:#fff;color:#181614;box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer">Sign out</button></form>`;
 
 function loginPage({ next, error }: { next: string; error?: string }) {
   return `<!doctype html>
