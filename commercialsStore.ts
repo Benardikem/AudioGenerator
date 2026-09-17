@@ -1,5 +1,8 @@
 import type { Express, Request, Response } from "express";
 import pg from "pg";
+import crypto from "crypto";
+
+const randomId = () => crypto.randomBytes(16).toString("hex");
 
 /**
  * DO NOT REMOVE OR SWITCH BACK TO FIRESTORE. See GEMINI.md.
@@ -49,6 +52,8 @@ interface Row {
 type AudioChange = Audio | null | undefined;
 
 interface Store {
+  putImage(image: Audio): Promise<string>;
+  getImage(id: string): Promise<Audio | null>;
   list(): Promise<Row[]>;
   get(id: string): Promise<Row | null>;
   upsert(id: string, record: RecordBody, audio: AudioChange, createdAt: Date): Promise<Row>;
@@ -58,9 +63,31 @@ interface Store {
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 export function installCommercialsApi(app: Express) {
   const store = createStore();
+
+  // Scene photos. Stored on their own and referenced by URL: embedded as data URLs they made the
+  // saved scenes JSON megabytes long, and a single phone photo was enough to make Save fail.
+  app.post("/api/scene-images", route(async (req, res) => {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/is.exec(String(req.body?.dataUrl ?? ""));
+    if (!m) return res.status(400).json({ error: "Upload a JPG, PNG or WebP photo." });
+    const bytes = Buffer.from(m[2], "base64");
+    if (bytes.length === 0) return res.status(400).json({ error: "The photo is empty." });
+    if (bytes.length > MAX_IMAGE_BYTES) return res.status(400).json({ error: "That photo is too large (8 MB max)." });
+    const id = await store.putImage({ bytes, mime: m[1].toLowerCase() });
+    res.json({ url: `/api/scene-images/${id}` });
+  }));
+
+  app.get("/api/scene-images/:id", route(async (req, res) => {
+    const image = ID.test(req.params.id) ? await store.getImage(req.params.id) : null;
+    if (!image) return res.status(404).json({ error: "Photo not found." });
+    res.setHeader("Content-Type", image.mime);
+    // Content-addressed by a random id that never changes, so it can be cached for good.
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.end(image.bytes);
+  }));
 
   app.get("/api/commercials", route(async (_req, res) => {
     res.json((await store.list()).map(toClient));
@@ -233,6 +260,21 @@ function postgresStore(connectionString: string): Store {
         throw err;
       }));
 
+  let imagesReady: Promise<unknown> | null = null;
+  const initImages = () =>
+    (imagesReady ??= pool
+      .query(`
+        CREATE TABLE IF NOT EXISTS scene_images (
+          id          text PRIMARY KEY,
+          mime        text NOT NULL,
+          bytes       bytea NOT NULL,
+          created_at  timestamptz NOT NULL DEFAULT now()
+        )`)
+      .catch((err) => {
+        imagesReady = null;
+        throw err;
+      }));
+
   const COLUMNS = "id, title, record, audio IS NOT NULL AS has_audio, created_at, updated_at";
   const toRow = (r: any): Row => ({
     id: r.id,
@@ -244,6 +286,17 @@ function postgresStore(connectionString: string): Store {
   });
 
   return {
+    async putImage(image) {
+      await initImages();
+      const id = randomId();
+      await pool.query("INSERT INTO scene_images (id, mime, bytes) VALUES ($1, $2, $3)", [id, image.mime, image.bytes]);
+      return id;
+    },
+    async getImage(id) {
+      await initImages();
+      const { rows } = await pool.query("SELECT mime, bytes FROM scene_images WHERE id = $1", [id]);
+      return rows[0] ? { mime: rows[0].mime, bytes: rows[0].bytes } : null;
+    },
     async list() {
       await init();
       const { rows } = await pool.query(`SELECT ${COLUMNS} FROM commercials ORDER BY updated_at DESC`);
@@ -289,8 +342,17 @@ function postgresStore(connectionString: string): Store {
 function memoryStore(): Store {
   const rows = new Map<string, Row & { audio: Audio | null }>();
   const strip = ({ audio: _audio, ...row }: Row & { audio: Audio | null }): Row => row;
+  const images = new Map<string, Audio>();
 
   return {
+    async putImage(image) {
+      const id = randomId();
+      images.set(id, image);
+      return id;
+    },
+    async getImage(id) {
+      return images.get(id) ?? null;
+    },
     async list() {
       return [...rows.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).map(strip);
     },

@@ -43,6 +43,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [voiceLine, setVoiceLine] = useState('');
   const [visualPrompt, setVisualPrompt] = useState('');
   const [imageSrc, setImageSrc] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [sceneType, setSceneType] = useState<AdvertScene['type']>('photo');
 
   useEffect(() => {
@@ -56,16 +58,29 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
   if (!isOpen || !scene) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Shrink to video size, then store on the server and keep only its URL in the scene. Embedding
+  // the photo itself made the saved ad megabytes long, and Save failed with "Scenes are too large".
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (ev.target?.result) {
-          setImageSrc(ev.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+    e.target.value = '';
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const dataUrl = await shrinkPhoto(file, 1350);
+      const res = await fetch('/api/scene-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ dataUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || 'The photo could not be uploaded.');
+      setImageSrc(data.url);
+    } catch (err: any) {
+      setUploadError(err?.message || 'The photo could not be uploaded.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -180,11 +195,12 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4]">
                     <Upload className="w-3.5 h-3.5 text-[#E8A317]" />
-                    <span>Upload Custom Photo</span>
+                    <span>{uploading ? 'Uploading...' : 'Upload Custom Photo'}</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       onChange={handleFileUpload}
+                      disabled={uploading}
                       className="hidden"
                     />
                   </label>
@@ -197,6 +213,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     <span>Preview in Canvas</span>
                   </button>
                 </div>
+
+                {uploadError && <p className="text-[11px] font-semibold text-red-700">{uploadError}</p>}
 
                 {/* Preset Picker */}
                 <select
@@ -230,6 +248,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
             <button
               type="button"
               onClick={handleSave}
+              disabled={uploading}
               className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
             >
               <Check className="w-4 h-4" />
@@ -241,3 +260,27 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     </div>
   );
 };
+
+/** Scale a photo so its longest side is at most maxSide pixels, and re-encode as JPEG. */
+function shrinkPhoto(file: File, maxSide: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('This browser could not process the photo.'));
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('That file could not be read as a photo.'));
+    };
+    img.src = url;
+  });
+}
