@@ -151,18 +151,9 @@ export const NewCommercialModal: React.FC<NewCommercialModalProps> = ({
       });
       onClose();
     } catch (err: any) {
-      console.warn('Error with API, generating local fallback campaign:', err);
-      // Seamless local fallback so user never encounters a traffic error
-      const finalTitle = topicInput ? `Legit Africa: ${topicInput.slice(0, 30)}` : 'New Legit Africa Commercial';
-      const fallbackScript = topicInput || `Buyer bought phone labeled brand new in Computer Village Ikeja, but the battery died after 48 hours.\nLegit Africa helps buyers identify trusted gadget shops.`;
-      const scenes = generateScenesFromScript(fallbackScript, finalTitle);
-      onCreateCommercial({
-        title: finalTitle,
-        script: fallbackScript,
-        scenes,
-        aspectRatio: selectedRatio,
-      });
-      onClose();
+      // Show why and stay open. Loading a stand-in script here made a failure look like a
+      // strange result, unrelated to the topic that was asked for.
+      setErrorMsg(err?.message || 'The ad could not be generated. Please try again.');
     } finally {
       setIsGenerating(false);
     }
