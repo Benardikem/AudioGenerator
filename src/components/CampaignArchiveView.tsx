@@ -7,6 +7,7 @@ import {
   Trash2,
   Layers,
   ArrowUpRight,
+  RotateCcw,
   Database,
   History,
 } from 'lucide-react';
@@ -161,9 +162,10 @@ export const CampaignArchiveView: React.FC<CampaignArchiveViewProps> = ({
                             type="button"
                             onClick={() => onLoadCommercial(comm)}
                             className={`${actionBtn} bg-[#E8A317] hover:bg-[#C6860C] border-[#E8A317] text-[#181614]`}
+                            title={isActive ? 'Discard unsaved changes and reload the saved version' : 'Open this ad in the studio'}
                           >
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                            Open
+                            {isActive ? <RotateCcw className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
+                            {isActive ? 'Reload saved' : 'Open'}
                           </button>
                           <button
                             type="button"
@@ -177,9 +179,10 @@ export const CampaignArchiveView: React.FC<CampaignArchiveViewProps> = ({
                             type="button"
                             onClick={() => onDuplicateCommercial(comm)}
                             className={`${actionBtn} bg-white hover:bg-[#F4EEE2] border-[#EAE3D4] text-[#181614]`}
-                            title="Duplicate into a new ad"
+                            title="Make a copy you can change without touching the original"
                           >
                             <Copy className="w-3.5 h-3.5" />
+                            Duplicate
                           </button>
                           <button
                             type="button"

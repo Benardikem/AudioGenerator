@@ -36,7 +36,6 @@ import { CampaignArchiveView } from './components/CampaignArchiveView';
 import { generateScenesFromScript } from './utils/sceneGenerator';
 import { GeneratedCommercial, CommercialPreset, AdvertScene, AspectRatio } from './types';
 import { BRAND_COLORS, ADVERT_SCENES } from './data/advertScenes';
-import { CommercialsDrawer } from './components/CommercialsDrawer';
 import {
   CommercialRecord,
   getSavedCommercials,
@@ -88,7 +87,6 @@ export default function App() {
   const [campaignTitle, setCampaignTitle] = useState('LegitAfrica Commercial (Baritone Pidgin)');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('4:5');
   const [savedCommercials, setSavedCommercials] = useState<CommercialRecord[]>([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSavingDb, setIsSavingDb] = useState(false);
   const [dbNotice, setDbNotice] = useState<string | null>(null);
 
@@ -398,23 +396,6 @@ export default function App() {
               <span>New Ad</span>
             </button>
 
-            {/* Database Campaign Drawer Toggle */}
-            <button
-              type="button"
-              id="campaigns-archive-btn"
-              onClick={() => setIsDrawerOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[#181614] bg-[#E8A317]/15 hover:bg-[#E8A317]/30 border border-[#E8A317]/50 transition-all font-bold text-xs cursor-pointer shadow-xs"
-              title="Open saved commercials & history database"
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-[#C6860C]" />
-              <span className="hidden sm:inline">Campaigns</span>
-              {savedCommercials.length > 0 && (
-                <span className="bg-[#181614] text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
-                  {savedCommercials.length}
-                </span>
-              )}
-            </button>
-
             {/* Quick Save button */}
             <button
               type="button"
@@ -523,6 +504,7 @@ export default function App() {
                   type="text"
                   value={campaignTitle}
                   onChange={(e) => setCampaignTitle(e.target.value)}
+                  size={Math.min(60, Math.max(24, campaignTitle.length + 2))}
                   className="font-bold text-xs sm:text-sm text-[#181614] bg-transparent hover:bg-white/60 focus:bg-white border-b border-transparent focus:border-[#E8A317] px-1 py-0.5 rounded outline-none transition-colors"
                   title="Click to rename commercial title"
                 />
@@ -996,21 +978,6 @@ git push -u origin main`}
           </div>
         </div>
       )}
-
-      {/* Database Commercials Drawer */}
-      <CommercialsDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        commercials={savedCommercials}
-        activeCommercialId={activeCommercialId}
-        onLoadCommercial={handleLoadSavedCommercial}
-        onSaveCurrent={handleSaveCurrentCommercial}
-        onDeleteCommercial={handleDeleteSavedCommercial}
-        onDuplicateCommercial={handleDuplicateCommercial}
-        onNewCommercial={handleNewCommercial}
-        isSaving={isSavingDb}
-        currentTitle={campaignTitle}
-      />
 
       {/* New Commercial Creation & AI Wizard Modal */}
       <NewCommercialModal
