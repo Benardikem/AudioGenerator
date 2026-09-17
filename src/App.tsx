@@ -336,6 +336,10 @@ export default function App() {
 
       setActiveCommercial(newTake);
       setTakes((prev) => [newTake, ...prev]);
+      if (data.usedBackupModel) {
+        setDbNotice("Voiced with the backup voice model: today's free allowance on the main one is used up. It may sound slightly different.");
+        setTimeout(() => setDbNotice(null), 8000);
+      }
     } catch (err: any) {
       console.error('Generation error:', err);
       setError(err.message || 'Failed to generate audio. Please try again.');

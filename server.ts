@@ -47,8 +47,23 @@ function getGeminiClient(): GoogleGenAI {
  * Turns a Gemini API failure into a message the person using the studio can act on, instead of
  * a raw JSON error or, worse, a silent stand-in result.
  */
+const VOICE_MODELS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
+
+/** A free-tier daily allowance being used up, as opposed to a short burst limit or a real fault. */
+function isDailyLimit(error: any) {
+  return /PerDay|free_tier_requests/i.test(String(error?.message ?? error ?? ""));
+}
+
 function geminiError(error: any, fallback: string): { status: number; message: string } {
   const raw = String(error?.message ?? error ?? "");
+  if (isDailyLimit(error)) {
+    return {
+      status: 429,
+      // Google resets free-tier daily limits at midnight Pacific time, which is 8am or 9am in Lagos.
+      message:
+        "Today's free Gemini allowance for this is used up. It resets around 8am Nigeria time. Opening the app in AI Studio's preview uses the same allowance.",
+    };
+  }
   if (/prepayment credits are depleted/i.test(raw)) {
     return {
       status: 402,
@@ -172,18 +187,34 @@ app.post("/api/generate-commercial-audio", async (req, res) => {
       ? voice
       : "Fenrir";
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: promptText }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: validVoice },
+    // On the free tier each voice model has its own small daily allowance (10 requests for
+    // gemini-3.1-flash-tts). When the preferred model's is used up, the older model still has
+    // its own, so use it rather than stop, and tell the person it happened: the voice can sound
+    // slightly different. Any other kind of failure is not retried.
+    let response: any;
+    let usedModel = VOICE_MODELS[0];
+    for (let i = 0; ; i++) {
+      usedModel = VOICE_MODELS[i];
+      try {
+        response = await ai.models.generateContent({
+          model: usedModel,
+          contents: [{ parts: [{ text: promptText }] }],
+          config: {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: validVoice },
+              },
+            },
           },
-        },
-      },
-    });
+        });
+        break;
+      } catch (err: any) {
+        const lastModel = i === VOICE_MODELS.length - 1;
+        if (lastModel || !isDailyLimit(err)) throw err;
+        console.warn(`[voiceover] ${usedModel} daily limit reached, trying ${VOICE_MODELS[i + 1]}`);
+      }
+    }
 
     let rawAudioBase64: string | undefined;
     for (const part of response.candidates?.[0]?.content?.parts || []) {
@@ -224,6 +255,8 @@ app.post("/api/generate-commercial-audio", async (req, res) => {
       style,
       timbre,
       script: script.trim(),
+      model: usedModel,
+      usedBackupModel: usedModel !== VOICE_MODELS[0],
     });
   } catch (error: any) {
     console.error("Audio generation error:", error);
