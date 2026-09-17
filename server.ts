@@ -13,7 +13,9 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-// Login first: every route registered after this needs a signed-in session.
+// DO NOT REMOVE OR MOVE. Login first: every route registered after this needs a signed-in
+// session. The app is public at studio.legitafrica.com and the API spends a real Gemini key.
+// See GEMINI.md.
 installAuth(app);
 
 app.use(express.json({ limit: "10mb" }));

@@ -5,6 +5,8 @@ import fs from "fs";
 import path from "path";
 
 /**
+ * DO NOT DELETE, RENAME OR REWRITE THIS FILE. It is required in production. See GEMINI.md.
+ *
  * Password login for the studio.
  *
  * The API routes spend money: every call to /api/generate-commercial-audio or /api/polish-script
