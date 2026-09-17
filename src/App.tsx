@@ -22,6 +22,7 @@ import {
   Layers,
   ChevronRight,
   Star,
+  Plus,
 } from 'lucide-react';
 import { ScriptEditor, DEFAULT_SCRIPT } from './components/ScriptEditor';
 import { VoiceSelector, VOICE_OPTIONS } from './components/VoiceSelector';
@@ -337,7 +338,7 @@ export default function App() {
                   LEGIT <span className="text-[#E8A317]">AFRICA</span>
                 </span>
                 <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#F4EEE2] text-[#181614] border border-[#EAE3D4]">
-                  1080 × 1350 (4:5)
+                  {aspectRatio === '9:16' ? '1080 × 1920 (9:16)' : '1080 × 1350 (4:5)'}
                 </span>
               </div>
               <p className="text-[11px] text-[#6B6256] hidden sm:block">
@@ -348,6 +349,18 @@ export default function App() {
 
           {/* Header Actions */}
           <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* New Commercial Draft Button */}
+            <button
+              type="button"
+              id="header-new-ad-btn"
+              onClick={handleNewCommercial}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] transition-all font-bold text-xs cursor-pointer shadow-xs active:scale-98"
+              title="Start a new commercial draft"
+            >
+              <Plus className="w-3.5 h-3.5 text-[#181614]" />
+              <span>New Ad</span>
+            </button>
+
             {/* Database Campaign Drawer Toggle */}
             <button
               type="button"
