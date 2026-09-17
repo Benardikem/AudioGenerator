@@ -243,6 +243,12 @@ class CommercialAudioEngine {
       clearInterval(this.bgmInterval);
       this.bgmInterval = null;
     }
+    if (this.customAudioEl) {
+      try {
+        this.customAudioEl.pause();
+        this.customAudioEl.currentTime = 0;
+      } catch (_) {}
+    }
     if (this.bgmGain && this.ctx) {
       try {
         this.bgmGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
@@ -255,9 +261,32 @@ class CommercialAudioEngine {
     }
   }
 
+  private customAudioEl: HTMLAudioElement | null = null;
+
+  startCustomAudio(url: string, volume = 0.15) {
+    this.stopBgmBed();
+    try {
+      this.isBgmPlaying = true;
+      if (!this.customAudioEl) {
+        this.customAudioEl = new Audio();
+        this.customAudioEl.loop = true;
+      }
+      this.customAudioEl.src = url;
+      this.customAudioEl.volume = Math.max(0, Math.min(1, volume));
+      this.customAudioEl.currentTime = 0;
+      this.customAudioEl.play().catch((e) => console.warn('Custom BGM play error:', e));
+    } catch (e) {
+      console.warn('Could not start custom audio:', e);
+    }
+  }
+
   setBgmVolume(volume: number) {
+    const clamped = Math.max(0, Math.min(1, volume));
+    if (this.customAudioEl) {
+      this.customAudioEl.volume = clamped;
+    }
     if (this.bgmGain && this.ctx) {
-      this.bgmGain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), this.ctx.currentTime);
+      this.bgmGain.gain.setValueAtTime(clamped, this.ctx.currentTime);
     }
   }
 

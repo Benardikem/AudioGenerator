@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidCommercial(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && data.script is string && data.script.size() > 0 && data.script.size() <= 10000
+        && data.voice is string && data.voice.size() <= 100
+        && data.style is string && data.style.size() <= 100
+        && (!('voiceName' in data) || (data.voiceName is string && data.voiceName.size() <= 100))
+        && (!('timbre' in data) || (data.timbre in ['standard', 'baritone', 'bass']))
+        && (!('audioUrl' in data) || (data.audioUrl is string && data.audioUrl.size() <= 2000000))
+        && (!('duration' in data) || (data.duration is number))
+        && (!('scenes' in data) || (data.scenes is string && data.scenes.size() <= 500000))
+        && (!('aspectRatio' in data) || (data.aspectRatio is string && data.aspectRatio.size() <= 10))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 50))
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 50));
+    }
+
+    match /commercials/{commercialId} {
+      allow get: if isValidId(commercialId);
+      allow list: if true;
+      allow create: if isValidId(commercialId) && isValidCommercial(request.resource.data);
+      allow update: if isValidId(commercialId) && isValidCommercial(request.resource.data);
+      allow delete: if isValidId(commercialId);
+    }
+  }
+}

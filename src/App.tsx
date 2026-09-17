@@ -29,8 +29,18 @@ import { AudioVisualizer } from './components/AudioVisualizer';
 import { SocialVideoOverlay } from './components/SocialVideoOverlay';
 import { StoryboardEditor } from './components/StoryboardEditor';
 import { GoogleTasksPanel } from './components/GoogleTasksPanel';
-import { GeneratedCommercial, CommercialPreset, AdvertScene } from './types';
+import { GeneratedCommercial, CommercialPreset, AdvertScene, AspectRatio } from './types';
 import { BRAND_COLORS, ADVERT_SCENES } from './data/advertScenes';
+import { CommercialsDrawer } from './components/CommercialsDrawer';
+import {
+  CommercialRecord,
+  getSavedCommercials,
+  subscribeToSavedCommercials,
+  saveCommercial,
+  deleteCommercial,
+} from './lib/commercialsDb';
+import { testConnection } from './lib/firebase';
+import { FolderOpen, Save } from 'lucide-react';
 
 export default function App() {
   const [script, setScript] = useState(DEFAULT_SCRIPT);
@@ -65,6 +75,165 @@ export default function App() {
 
   // Active generated commercial
   const [activeCommercial, setActiveCommercial] = useState<GeneratedCommercial | null>(null);
+
+  // Active saved commercial ID & title in database
+  const [activeCommercialId, setActiveCommercialId] = useState<string | null>(null);
+  const [campaignTitle, setCampaignTitle] = useState('LegitAfrica Commercial (Baritone Pidgin)');
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('4:5');
+  const [savedCommercials, setSavedCommercials] = useState<CommercialRecord[]>([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isSavingDb, setIsSavingDb] = useState(false);
+  const [dbNotice, setDbNotice] = useState<string | null>(null);
+
+  // Initialize and subscribe to Firestore saved commercials
+  useEffect(() => {
+    testConnection();
+    const unsubscribe = subscribeToSavedCommercials(
+      (records) => {
+        setSavedCommercials(records);
+      },
+      (err) => {
+        console.warn('Real-time sync error:', err);
+      }
+    );
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Save current active state to database
+  const handleSaveCurrentCommercial = async (title: string) => {
+    setIsSavingDb(true);
+    setDbNotice(null);
+    try {
+      const saved = await saveCommercial({
+        id: activeCommercialId || undefined,
+        title,
+        script,
+        voice: selectedVoice,
+        voiceName: selectedVoiceObj.name,
+        timbre: selectedTimbre,
+        style: selectedStyle,
+        audioUrl: activeCommercial?.audioUrl,
+        duration: activeCommercial?.duration,
+        scenes: JSON.stringify(scenes),
+        aspectRatio: aspectRatio,
+      });
+      setActiveCommercialId(saved.id);
+      setCampaignTitle(saved.title);
+      setDbNotice('Campaign saved to database successfully!');
+      setTimeout(() => setDbNotice(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to save commercial:', err);
+      setDbNotice('Failed to save to database. Check connection.');
+      setTimeout(() => setDbNotice(null), 5000);
+    } finally {
+      setIsSavingDb(false);
+    }
+  };
+
+  // Load a previously saved commercial from the database
+  const handleLoadSavedCommercial = (comm: CommercialRecord) => {
+    setActiveCommercialId(comm.id);
+    setCampaignTitle(comm.title);
+    setScript(comm.script);
+    setSelectedVoice(comm.voice);
+    if (comm.timbre) setSelectedTimbre(comm.timbre);
+    if (comm.style) setSelectedStyle(comm.style);
+    if (comm.aspectRatio === '9:16' || comm.aspectRatio === '4:5') {
+      setAspectRatio(comm.aspectRatio as AspectRatio);
+    }
+
+    // Restore scenes if stored
+    if (comm.scenes) {
+      try {
+        const parsedScenes = JSON.parse(comm.scenes);
+        if (Array.isArray(parsedScenes) && parsedScenes.length > 0) {
+          setScenes(parsedScenes);
+          setActiveSceneIndex(0);
+          setSceneVersion((v) => v + 1);
+        }
+      } catch (e) {
+        console.warn('Could not parse stored scenes:', e);
+      }
+    }
+
+    // Restore audio if available
+    if (comm.audioUrl && comm.duration) {
+      const loadedTake: GeneratedCommercial = {
+        id: `take-${comm.id}`,
+        audioUrl: comm.audioUrl,
+        duration: comm.duration,
+        voice: comm.voice,
+        voiceName: comm.voiceName || comm.voice,
+        style: comm.style,
+        timbre: comm.timbre || 'baritone',
+        script: comm.script,
+        createdAt: new Date(comm.createdAt || Date.now()).getTime(),
+      };
+      setActiveCommercial(loadedTake);
+      setTakes((prev) => [loadedTake, ...prev.filter((t) => t.id !== loadedTake.id)]);
+    }
+
+    setDbNotice(`Loaded: "${comm.title}"`);
+    setTimeout(() => setDbNotice(null), 3500);
+  };
+
+  // Create a brand new commercial (resets to fresh state ready for title)
+  const handleNewCommercial = () => {
+    setActiveCommercialId(null);
+    setCampaignTitle('New LegitAfrica Commercial');
+    setScript(DEFAULT_SCRIPT);
+    setScenes(ADVERT_SCENES);
+    setActiveSceneIndex(0);
+    setSceneVersion((v) => v + 1);
+    setActiveCommercial(null);
+    setDbNotice('Started new commercial draft.');
+    setTimeout(() => setDbNotice(null), 3000);
+  };
+
+  // Delete a commercial from the database
+  const handleDeleteSavedCommercial = async (id: string) => {
+    try {
+      await deleteCommercial(id);
+      if (activeCommercialId === id) {
+        setActiveCommercialId(null);
+      }
+    } catch (err) {
+      console.error('Failed to delete commercial:', err);
+    }
+  };
+
+  // Duplicate / Fork a saved commercial into a new editable variation
+  const handleDuplicateCommercial = async (comm: CommercialRecord) => {
+    setIsSavingDb(true);
+    setDbNotice(`Duplicating "${comm.title}"...`);
+    try {
+      const forkedTitle = `${comm.title} (Copy)`;
+      const newRecord = await saveCommercial({
+        title: forkedTitle,
+        script: comm.script,
+        voice: comm.voice,
+        voiceName: comm.voiceName || comm.voice,
+        timbre: comm.timbre,
+        style: comm.style,
+        audioUrl: comm.audioUrl,
+        duration: comm.duration,
+        scenes: comm.scenes,
+        aspectRatio: comm.aspectRatio || '4:5',
+      });
+      // Immediately load the duplicated version as active
+      handleLoadSavedCommercial(newRecord);
+      setDbNotice(`Duplicated & switched to "${forkedTitle}"`);
+      setTimeout(() => setDbNotice(null), 3500);
+    } catch (err) {
+      console.error('Failed to duplicate commercial:', err);
+      setDbNotice('Failed to duplicate commercial.');
+      setTimeout(() => setDbNotice(null), 3500);
+    } finally {
+      setIsSavingDb(false);
+    }
+  };
 
   // Mode: 'video_overlay' (4:5 Social Video Focus) vs 'radio_jingle' (Retained Broadcast)
   const [playerMode, setPlayerMode] = useState<'video_overlay' | 'radio_jingle'>('video_overlay');
@@ -178,7 +347,37 @@ export default function App() {
           </div>
 
           {/* Header Actions */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Database Campaign Drawer Toggle */}
+            <button
+              type="button"
+              id="campaigns-archive-btn"
+              onClick={() => setIsDrawerOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[#181614] bg-[#E8A317]/15 hover:bg-[#E8A317]/30 border border-[#E8A317]/50 transition-all font-bold text-xs cursor-pointer shadow-xs"
+              title="Open saved commercials & history database"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-[#C6860C]" />
+              <span className="hidden sm:inline">Campaigns</span>
+              {savedCommercials.length > 0 && (
+                <span className="bg-[#181614] text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+                  {savedCommercials.length}
+                </span>
+              )}
+            </button>
+
+            {/* Quick Save button */}
+            <button
+              type="button"
+              id="quick-save-btn"
+              onClick={() => handleSaveCurrentCommercial(campaignTitle)}
+              disabled={isSavingDb}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[#181614] bg-[#F4EEE2] hover:bg-[#EAE3D4] border border-[#EAE3D4] transition-all font-semibold text-xs cursor-pointer shadow-xs"
+              title="Save changes to current campaign"
+            >
+              <Save className="w-3.5 h-3.5 text-[#C6860C]" />
+              <span className="hidden md:inline">{isSavingDb ? 'Saving...' : 'Save'}</span>
+            </button>
+
             <button
               type="button"
               id="git-repo-btn"
@@ -186,7 +385,7 @@ export default function App() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[#181614] hover:text-[#181614] bg-[#F4EEE2] hover:bg-[#EAE3D4] transition-all font-semibold text-xs border border-[#EAE3D4] cursor-pointer shadow-xs"
             >
               <Github className="w-3.5 h-3.5 text-[#E8A317]" />
-              <span className="hidden sm:inline">Push to GitHub</span>
+              <span className="hidden lg:inline">Push to GitHub</span>
             </button>
 
             {/* Tab toggle */}
@@ -221,34 +420,50 @@ export default function App() {
       </header>
 
       {/* Purpose Banner strictly in brand palette */}
-      <section className="bg-[#F4EEE2] border-b border-[#EAE3D4] py-3.5 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <section className="bg-[#F4EEE2] border-b border-[#EAE3D4] py-2.5 sm:py-3.5 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-white border border-[#EAE3D4] flex items-center justify-center text-[#E8A317]">
+            <div className="w-8 h-8 rounded-lg bg-white border border-[#EAE3D4] flex items-center justify-center text-[#E8A317] shrink-0">
               <Video className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-xs sm:text-sm font-bold text-[#181614]">
-                Legit Africa 4:5 Portrait Video (1080 × 1350)
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="text"
+                  value={campaignTitle}
+                  onChange={(e) => setCampaignTitle(e.target.value)}
+                  className="font-bold text-xs sm:text-sm text-[#181614] bg-transparent hover:bg-white/60 focus:bg-white border-b border-transparent focus:border-[#E8A317] px-1 py-0.5 rounded outline-none transition-colors"
+                  title="Click to rename commercial title"
+                />
+                {activeCommercialId && (
+                  <span className="text-[10px] font-mono text-[#6B6256] bg-white/70 px-1.5 py-0.5 rounded border border-[#DACFBE]">
+                    Saved in Cloud DB
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-[#6B6256]">
                 Warm Nigerian Pidgin narration • Burned-in captions near the bottom • 8 timed storyboard scenes
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-xs text-[#6B6256]">
+          <div className="flex items-center gap-3 text-xs text-[#6B6256] flex-wrap">
+            {dbNotice && (
+              <span className="text-[11px] font-bold text-[#181614] bg-[#E8A317] px-2.5 py-1 rounded-lg animate-in fade-in">
+                {dbNotice}
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#E8A317]" />
               Exact 4:5 Portrait
             </span>
             <span className="flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#E8A317]" />
-              30 FPS Render Engine
+              30 FPS Fast H.264
             </span>
             <span className="flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#E8A317]" />
-              Burned Captions
+              Cloud Database
             </span>
           </div>
         </div>
@@ -292,7 +507,7 @@ export default function App() {
                       }`}
                     >
                       <Smartphone className="w-3.5 h-3.5" />
-                      📱 4:5 Video Player
+                      📱 Social Video Player ({aspectRatio})
                     </button>
                     <button
                       type="button"
@@ -337,6 +552,8 @@ export default function App() {
                   onGenerateAudioClick={handleGenerateAudio}
                   isGeneratingAudio={isGenerating}
                   isScriptOutOfSync={isScriptOutOfSync}
+                  aspectRatio={aspectRatio}
+                  onAspectRatioChange={setAspectRatio}
                 />
               ) : (
                 <AudioVisualizer
@@ -563,6 +780,21 @@ git push -u origin main`}
           </div>
         </div>
       )}
+
+      {/* Database Commercials Drawer */}
+      <CommercialsDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        commercials={savedCommercials}
+        activeCommercialId={activeCommercialId}
+        onLoadCommercial={handleLoadSavedCommercial}
+        onSaveCurrent={handleSaveCurrentCommercial}
+        onDeleteCommercial={handleDeleteSavedCommercial}
+        onDuplicateCommercial={handleDuplicateCommercial}
+        onNewCommercial={handleNewCommercial}
+        isSaving={isSavingDb}
+        currentTitle={campaignTitle}
+      />
     </div>
   );
 }

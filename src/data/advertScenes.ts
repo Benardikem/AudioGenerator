@@ -20,6 +20,29 @@ export const VIDEO_CONFIG = {
   targetDuration: 32, // 30–35s
 };
 
+export const VIDEO_CONFIGS = {
+  '4:5': {
+    width: 1080,
+    height: 1350,
+    aspectRatio: '4:5' as const,
+    label: '4:5 Portrait',
+    description: 'Instagram & Facebook Feed',
+    previewW: 340,
+    previewH: 425,
+    fps: 30,
+  },
+  '9:16': {
+    width: 1080,
+    height: 1920,
+    aspectRatio: '9:16' as const,
+    label: '9:16 Full Vertical',
+    description: 'TikTok, Reels, Shorts & Stories',
+    previewW: 300,
+    previewH: 533,
+    fps: 30,
+  },
+};
+
 export const ADVERT_SCENES: AdvertScene[] = [
   {
     id: 1,

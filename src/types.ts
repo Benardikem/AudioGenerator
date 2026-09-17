@@ -80,3 +80,5 @@ export interface AdvertScene {
   type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card';
 }
 
+export type AspectRatio = '4:5' | '9:16';
+

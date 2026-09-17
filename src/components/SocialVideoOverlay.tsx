@@ -22,6 +22,9 @@ import {
   X,
   AlertTriangle,
   Zap,
+  Upload,
+  Smartphone,
+  CheckCircle,
 } from 'lucide-react';
 import { soundEngine } from '../utils/audioSynth';
 import {
@@ -30,8 +33,8 @@ import {
   exportToVTT,
   downloadFile,
 } from '../utils/subtitleGenerator';
-import { SubtitleCue, AdvertScene } from '../types';
-import { BRAND_COLORS, VIDEO_CONFIG, ADVERT_SCENES } from '../data/advertScenes';
+import { SubtitleCue, AdvertScene, AspectRatio } from '../types';
+import { BRAND_COLORS, VIDEO_CONFIG, VIDEO_CONFIGS, ADVERT_SCENES } from '../data/advertScenes';
 
 interface SocialVideoOverlayProps {
   audioUrl?: string;
@@ -46,6 +49,8 @@ interface SocialVideoOverlayProps {
   onGenerateAudioClick?: () => void;
   isGeneratingAudio?: boolean;
   isScriptOutOfSync?: boolean;
+  aspectRatio?: AspectRatio;
+  onAspectRatioChange?: (ratio: AspectRatio) => void;
 }
 
 export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
@@ -61,10 +66,28 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   onGenerateAudioClick,
   isGeneratingAudio = false,
   isScriptOutOfSync = false,
+  aspectRatio = '4:5',
+  onAspectRatioChange,
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pendingPlayRef = useRef(false);
+
+  const [activeRatio, setActiveRatio] = useState<AspectRatio>(aspectRatio);
+
+  // Sync external aspectRatio prop if changed
+  useEffect(() => {
+    if (aspectRatio && aspectRatio !== activeRatio) {
+      setActiveRatio(aspectRatio);
+    }
+  }, [aspectRatio]);
+
+  const handleSelectRatio = (ratio: AspectRatio) => {
+    setActiveRatio(ratio);
+    onAspectRatioChange?.(ratio);
+  };
+
+  const currentVideoConfig = VIDEO_CONFIGS[activeRatio] || VIDEO_CONFIGS['4:5'];
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -72,9 +95,28 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [voiceVolume, setVoiceVolume] = useState(1);
 
-  // Background audio bed
-  const [bgmTheme, setBgmTheme] = useState<'off' | 'lofi' | 'ambient'>('ambient');
+  // Background audio bed & Custom BGM uploader
+  const [bgmTheme, setBgmTheme] = useState<'off' | 'lofi' | 'ambient' | 'custom'>('ambient');
   const [bgmVolume, setBgmVolume] = useState(0.1);
+  const [customBgmUrl, setCustomBgmUrl] = useState<string | null>(null);
+  const [customBgmName, setCustomBgmName] = useState<string | null>(null);
+  const bgmFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleCustomBgmUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const blobUrl = URL.createObjectURL(file);
+      setCustomBgmUrl(blobUrl);
+      setCustomBgmName(file.name);
+      setBgmTheme('custom');
+      if (isPlaying) {
+        soundEngine.startCustomAudio(blobUrl, bgmVolume);
+      }
+    } catch (err) {
+      console.error('Failed to load custom BGM file:', err);
+    }
+  };
 
   // Subtitle burned-in settings
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
@@ -245,13 +287,15 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         pendingPlayRef.current = false;
         audio.play().then(() => {
           setIsPlaying(true);
-          if (bgmTheme !== 'off') {
+          if (bgmTheme === 'custom' && customBgmUrl) {
+            soundEngine.startCustomAudio(customBgmUrl, bgmVolume);
+          } else if (bgmTheme !== 'off') {
             soundEngine.startBgmBed(bgmTheme, bgmVolume);
           }
         }).catch((err) => console.warn('Autoplay error:', err));
       }
     }
-  }, [audioUrl, bgmTheme, bgmVolume]);
+  }, [audioUrl, bgmTheme, bgmVolume, customBgmUrl]);
 
   // Play / Pause Sync
   const togglePlayPause = () => {
@@ -275,7 +319,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         }
         audio.play().then(() => {
           setIsPlaying(true);
-          if (bgmTheme !== 'off') {
+          if (bgmTheme === 'custom' && customBgmUrl) {
+            soundEngine.startCustomAudio(customBgmUrl, bgmVolume);
+          } else if (bgmTheme !== 'off') {
             soundEngine.startBgmBed(bgmTheme, bgmVolume);
           }
         }).catch((e) => console.error('Audio play error:', e));
@@ -1355,7 +1401,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     try {
       setIsRecordingVideo(true);
       setRecordingProgress(0);
-      setRecordingStatusText('Initializing 1080×1350 canvas & audio stream...');
+      setRecordingStatusText(`Initializing ${currentVideoConfig.label} (${currentVideoConfig.width}×${currentVideoConfig.height}) canvas & audio stream...`);
 
       // Stop any active BGM bed to prevent double synth audio
       soundEngine.stopBgmBed();
@@ -1376,6 +1422,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
       // Route audio cleanly into stream using Web Audio destination (STRICTLY into stream, NOT to physical speakers!)
       let audioBufferSource: AudioBufferSourceNode | null = null;
+      let bgmBufferSource: AudioBufferSourceNode | null = null;
       let exportAudioCtx: AudioContext | null = null;
       try {
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -1384,15 +1431,36 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           await exportAudioCtx.resume();
         }
 
+        const dest = exportAudioCtx.createMediaStreamDestination();
+
+        // 1. Voiceover track
         const resp = await fetch(audioUrl);
         const arrayBuf = await resp.arrayBuffer();
         const decodedBuffer = await exportAudioCtx.decodeAudioData(arrayBuf);
 
-        const dest = exportAudioCtx.createMediaStreamDestination();
         audioBufferSource = exportAudioCtx.createBufferSource();
         audioBufferSource.buffer = decodedBuffer;
         // Connect ONLY to destination stream (NOT exportAudioCtx.destination) -> prevents echo!
         audioBufferSource.connect(dest);
+
+        // 2. Custom BGM track if active and theme is custom
+        if (bgmTheme === 'custom' && customBgmUrl) {
+          try {
+            const bgmResp = await fetch(customBgmUrl);
+            const bgmBuf = await bgmResp.arrayBuffer();
+            const decodedBgm = await exportAudioCtx.decodeAudioData(bgmBuf);
+            bgmBufferSource = exportAudioCtx.createBufferSource();
+            bgmBufferSource.buffer = decodedBgm;
+            bgmBufferSource.loop = true;
+
+            const bgmGainNode = exportAudioCtx.createGain();
+            bgmGainNode.gain.value = 0.18; // Balanced background level under Pidgin VO
+            bgmBufferSource.connect(bgmGainNode);
+            bgmGainNode.connect(dest);
+          } catch (bgmErr) {
+            console.warn('Could not mix custom BGM into video export:', bgmErr);
+          }
+        }
 
         dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
       } catch (e) {
@@ -1495,7 +1563,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         if (pct > highestProgress) {
           highestProgress = pct;
           setRecordingProgress(highestProgress);
-          setRecordingStatusText(`Recording 4:5 video: ${highestProgress}% (1080×1350)`);
+          setRecordingStatusText(`Recording ${currentVideoConfig.label} video: ${highestProgress}% (${currentVideoConfig.width}×${currentVideoConfig.height})`);
         }
 
         if (audio.ended || currentSec >= targetDuration - 0.25) {
@@ -1552,11 +1620,28 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold text-[#181614]">
-                Official 4:5 Social Video Advert Studio
+                Social Video Advert Studio
               </h3>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#E8A317] text-[#181614]">
-                1080 × 1350 (4:5)
-              </span>
+              {/* Aspect Ratio Switcher Toggle */}
+              <div className="inline-flex p-0.5 rounded-lg bg-[#EAE3D4] border border-[#D8CEBA]">
+                {(['4:5', '9:16'] as const).map((ratio) => {
+                  const isActive = activeRatio === ratio;
+                  return (
+                    <button
+                      key={ratio}
+                      type="button"
+                      onClick={() => handleSelectRatio(ratio)}
+                      className={`px-2.5 py-0.5 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-[#E8A317] text-[#181614] shadow-xs'
+                          : 'text-[#6B6256] hover:text-[#181614]'
+                      }`}
+                    >
+                      {ratio} {ratio === '4:5' ? '(1080×1350)' : '(1080×1920)'}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <p className="text-xs text-[#6B6256]">
               Nigerian Pidgin Voiceover • 8 Synchronized Scenes • Burned-in Captions
@@ -1601,12 +1686,12 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           </a>
 
           <button
-            id="export-4x5-video-btn"
+            id="export-social-video-btn"
             type="button"
             onClick={handleExportVideo}
             disabled={isRecordingVideo || isConvertingToMp4}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#181614] hover:bg-black rounded-xl transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            title="Record 1080x1350 canvas and convert to social-media-ready H.264 MP4"
+            title={`Record ${currentVideoConfig.width}x${currentVideoConfig.height} canvas and convert to social-media-ready H.264 MP4`}
           >
             {isRecordingVideo ? (
               <>
@@ -1621,7 +1706,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             ) : (
               <>
                 <Film className="w-3.5 h-3.5 text-[#E8A317]" />
-                Export Social Video (.mp4)
+                Export {currentVideoConfig.label} Video (.mp4)
               </>
             )}
           </button>
@@ -1714,24 +1799,29 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           <div className="w-full max-w-[360px] flex items-center justify-between text-xs text-[#6B6256] mb-2 px-1">
             <span className="font-semibold text-[#181614] flex items-center gap-1.5">
               <Camera className="w-3.5 h-3.5 text-[#E8A317]" />
-              Exact 4:5 Frame (1080×1350)
+              {currentVideoConfig.label} Frame ({currentVideoConfig.width}×{currentVideoConfig.height})
             </span>
             <span className="font-mono text-[11px]">
               {Math.floor(currentTime)}s / {Math.floor(totalDuration)}s
             </span>
           </div>
 
-          {/* 4:5 Canvas Stage with Phone Shell */}
+          {/* Dynamic Canvas Stage with Phone Shell (Responsive to 4:5 and 9:16) */}
           <div
             id="phone-video-frame"
-            className="relative w-[300px] h-[375px] sm:w-[360px] sm:h-[450px] bg-[#FBF8F1] rounded-[28px] border-4 border-[#181614] shadow-2xl overflow-hidden flex items-center justify-center cursor-pointer group"
+            style={{
+              aspectRatio: activeRatio === '9:16' ? '9 / 16' : '4 / 5',
+              height: activeRatio === '9:16' ? '500px' : '450px',
+              maxWidth: activeRatio === '9:16' ? '282px' : '360px',
+            }}
+            className="relative w-full bg-[#FBF8F1] rounded-[28px] border-4 border-[#181614] shadow-2xl overflow-hidden flex items-center justify-center cursor-pointer group"
             onClick={togglePlayPause}
           >
-            {/* The 1080x1350 Canvas Element */}
+            {/* Dynamic Canvas Element */}
             <canvas
               ref={canvasRef}
-              width={VIDEO_CONFIG.width}
-              height={VIDEO_CONFIG.height}
+              width={currentVideoConfig.width}
+              height={currentVideoConfig.height}
               className="w-full h-full object-cover"
             />
 
@@ -1740,7 +1830,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               <div className="absolute inset-0 bg-[#181614]/85 z-30 flex flex-col items-center justify-center p-6 text-center">
                 <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-600 text-white text-xs font-bold mb-4 shadow-md">
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                  REC 1080×1350 (4:5)
+                  REC {currentVideoConfig.width}×{currentVideoConfig.height} ({currentVideoConfig.label})
                 </div>
 
                 <p className="text-sm font-bold text-white mb-1">Exporting Commercial Video</p>
@@ -1940,8 +2030,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 )}
               </div>
 
-              {/* Background Music Theme */}
-              <div className="flex items-center gap-1.5 text-[#6B6256]">
+              {/* Background Music Theme & Custom Audio Uploader */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[#6B6256]">
                 <Music className="w-3 h-3 text-[#E8A317]" />
                 <span className="text-[10px] uppercase font-bold text-[#6B6256]">BGM:</span>
                 <select
@@ -1951,8 +2041,24 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 >
                   <option value="ambient">Ambient Bed</option>
                   <option value="lofi">Lofi Groove</option>
+                  {customBgmUrl && <option value="custom">Custom: {customBgmName.slice(0, 14)}...</option>}
                   <option value="off">Off</option>
                 </select>
+
+                {/* Custom Audio File Upload Button */}
+                <label
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold text-[#181614] bg-[#F4EEE2] hover:bg-[#EAE3D4] border border-[#EAE3D4] rounded cursor-pointer transition-colors"
+                  title="Upload your own background music (.mp3 or .wav)"
+                >
+                  <Upload className="w-2.5 h-2.5 text-[#E8A317]" />
+                  <span>Upload BGM</span>
+                  <input
+                    type="file"
+                    accept="audio/mp3,audio/wav,audio/mpeg,audio/aac"
+                    onChange={handleCustomBgmUpload}
+                    className="hidden"
+                  />
+                </label>
               </div>
             </div>
           </div>
