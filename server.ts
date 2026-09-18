@@ -8,6 +8,7 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import { installAuth } from "./auth";
 import { installCommercialsApi } from "./commercialsStore";
+import { installSceneVideosApi } from "./sceneVideos";
 
 /** Keep in step with MAX_SCENES in src/utils/sceneTimeline.ts. */
 const MAX_SCENES = 24;
@@ -26,6 +27,9 @@ app.use(express.json({ limit: "10mb" }));
 
 // DO NOT REMOVE. Saved commercials (Postgres). Must stay after installAuth. See GEMINI.md.
 installCommercialsApi(app);
+
+// DO NOT REMOVE. Scene video clips (files on disk). Must stay after installAuth. See GEMINI.md.
+installSceneVideosApi(app);
 
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {

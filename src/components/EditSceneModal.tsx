@@ -8,6 +8,8 @@ import {
   Camera,
   Film,
   FileText,
+  Video,
+  Trash2,
   Clock,
   Eye,
 } from 'lucide-react';
@@ -52,6 +54,9 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [eyebrow, setEyebrow] = useState('');
   const [headline, setHeadline] = useState('');
   const [textBackground, setTextBackground] = useState<'cream' | 'photo'>('cream');
+  const [videoSrc, setVideoSrc] = useState('');
+  const [clipUploading, setClipUploading] = useState(false);
+  const [clipError, setClipError] = useState<string | null>(null);
 
   useEffect(() => {
     if (scene) {
@@ -62,6 +67,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setEyebrow(scene.eyebrow || '');
       setHeadline(scene.headline || '');
       setTextBackground(scene.textBackground || 'cream');
+      setVideoSrc(scene.videoSrc || '');
+      setClipError(null);
     }
   }, [scene]);
 
@@ -93,12 +100,42 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     }
   };
 
+  // Clips are sent as the raw file, not a data URL: base64 is a third larger again, and a 40 MB
+  // clip would have to be held in memory twice over on both sides.
+  const handleClipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setClipError(null);
+    if (file.size > 60 * 1024 * 1024) {
+      setClipError('That clip is too large (60 MB max). Export it shorter or at a lower resolution.');
+      return;
+    }
+    setClipUploading(true);
+    try {
+      const res = await fetch('/api/scene-videos', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'video/mp4' },
+        credentials: 'same-origin',
+        body: file,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || 'The clip could not be uploaded.');
+      setVideoSrc(data.url);
+    } catch (err: any) {
+      setClipError(err?.message || 'The clip could not be uploaded.');
+    } finally {
+      setClipUploading(false);
+    }
+  };
+
   const handleSave = () => {
     onSave({
       ...scene,
       voiceLine: voiceLine.trim() || scene.voiceLine,
       visualPrompt: visualPrompt.trim() || scene.visualPrompt,
       imageSrc: imageSrc.trim() || scene.imageSrc,
+      videoSrc: videoSrc.trim() || undefined,
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -308,6 +345,39 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 </div>
 
                 {uploadError && <p className="text-[11px] font-semibold text-red-700">{uploadError}</p>}
+
+                {/* A clip plays in place of the photo. The photo stays as the fallback while it loads. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4]">
+                    <Video className="w-3.5 h-3.5 text-[#E8A317]" />
+                    <span>{clipUploading ? 'Uploading clip...' : videoSrc ? 'Replace Video Clip' : 'Upload Video Clip'}</span>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm"
+                      onChange={handleClipUpload}
+                      disabled={clipUploading}
+                      className="hidden"
+                    />
+                  </label>
+                  {videoSrc && (
+                    <button
+                      type="button"
+                      onClick={() => setVideoSrc('')}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-red-50 text-[#6B6256] hover:text-red-600 text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove clip</span>
+                    </button>
+                  )}
+                </div>
+
+                {videoSrc && !clipError && (
+                  <p className="text-[11px] text-[#6B6256]">
+                    Clip attached. It plays instead of the photo, loops if this scene runs longer than the
+                    clip, and is silent — the voiceover is the only sound.
+                  </p>
+                )}
+                {clipError && <p className="text-[11px] font-semibold text-red-700">{clipError}</p>}
 
                 {/* Preset Picker */}
                 <select

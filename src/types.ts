@@ -84,6 +84,8 @@ export interface AdvertScene {
   headline?: string;
   /** type 'text': plain cream background (default), or the scene photo darkened behind the text. */
   textBackground?: 'cream' | 'photo';
+  /** A video clip that plays as this scene's background instead of imageSrc. */
+  videoSrc?: string;
   /** 2 = drawn by type, any number of scenes. Absent on ads saved when scenes were drawn by position. */
   layoutVersion?: 2;
 }

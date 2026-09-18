@@ -58,6 +58,19 @@ in production the server refuses to start without it.
   `logo`, `ui_search`, `ui_review`, `end_card`.
 - Ads saved before this change have no `layoutVersion` and were drawn by position. `normalizeScenes`
   converts them on opening so they still look the same. Do not remove it.
+## Scene video clips
+
+- A scene can carry a video clip (`videoSrc`) that plays as its background instead of the photo.
+  Clips are uploaded to **`sceneVideos.ts`**, which stores them as files on disk under `MEDIA_DIR`
+  (a Docker volume at `/data/media` in production) and serves them with byte ranges.
+- Do **not** move clips into PostgreSQL. Every clip would then land in each nightly `pg_dump`, and
+  the backup keeps ten dumps per database, so a few adverts would cost gigabytes of storage every
+  three days. The files are mirrored to Backblaze separately.
+- In `server.ts`, keep `import { installSceneVideosApi } from "./sceneVideos";` and the call
+  `installSceneVideosApi(app)` after `installAuth(app);`.
+- Clips are always muted and looped to fill their scene, and get no slow zoom — the footage already
+  moves. The voiceover is the only sound in an advert.
+
 - Photo scenes draw only the scene's own photo. They used to draw fixed graphics from the first
   campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card, a WhatsApp chat) on top
   of every ad's photos. Do not add campaign-specific graphics back into the scene drawing; put them

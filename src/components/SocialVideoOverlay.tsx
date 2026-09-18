@@ -150,6 +150,57 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   // Preload scene imagery
   const preloadedImages = useRef<Map<string, HTMLImageElement>>(new Map());
 
+  /**
+   * Video clips used as scene backgrounds. One element per clip, kept across redraws: the canvas
+   * draws whatever frame the element is showing, so the element is the playhead, not a decoder we
+   * poke at. Always muted — the voiceover is the only sound in the advert.
+   */
+  const preloadedVideos = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const activeClipSrc = useRef<string | null>(null);
+
+  const getSceneVideo = (scene: AdvertScene | undefined) => {
+    const src = scene?.videoSrc;
+    if (!src) return null;
+    let video = preloadedVideos.current.get(src);
+    if (!video) {
+      video = document.createElement('video');
+      video.src = src;
+      video.muted = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      const redraw = () => {
+        if (!isPlayingRef.current) drawSceneToCanvas(currentTimeRef.current);
+      };
+      video.onloadeddata = redraw;
+      video.onseeked = redraw;
+      preloadedVideos.current.set(src, video);
+    }
+    return video;
+  };
+
+  const videoReady = (video: HTMLVideoElement | null): video is HTMLVideoElement =>
+    !!video && video.readyState >= 2 && video.videoWidth > 0;
+
+  /**
+   * Holds the clip at the point of the scene it is playing under. A clip shorter than its scene
+   * loops; a longer one is cut off when the scene ends. While the preview is paused the element is
+   * parked on the matching frame so scrubbing shows the right moment.
+   */
+  const syncSceneVideo = (video: HTMLVideoElement, timeIntoScene: number, playing: boolean) => {
+    const clip = video.duration;
+    if (!clip || !isFinite(clip) || clip <= 0) return;
+    const want = Math.max(0, timeIntoScene) % clip;
+    if (playing) {
+      if (video.paused) video.play().catch(() => {});
+      // Only correct real drift: nudging it every frame would stutter the picture.
+      if (Math.abs(video.currentTime - want) > 0.3) video.currentTime = want;
+    } else {
+      if (!video.paused) video.pause();
+      if (Math.abs(video.currentTime - want) > 0.05) video.currentTime = want;
+    }
+  };
+
   // Helper to get or dynamically load scene images (supports local files, data URLs, custom uploads)
   const getSceneImage = (scene: AdvertScene | undefined, defaultFallback: string) => {
     const src = scene?.imageSrc || defaultFallback;
@@ -167,6 +218,30 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     }
     return img;
   };
+
+  useEffect(() => {
+    const wanted = new Set(sceneList.map((s) => s.videoSrc).filter(Boolean) as string[]);
+    preloadedVideos.current.forEach((video, src) => {
+      if (wanted.has(src)) return;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      preloadedVideos.current.delete(src);
+    });
+    wanted.forEach((src) => getSceneVideo({ videoSrc: src } as AdvertScene));
+  }, [sceneList]);
+
+  useEffect(
+    () => () => {
+      preloadedVideos.current.forEach((video) => video.pause());
+    },
+    []
+  );
+
+  // Pausing the preview must stop the clips too, or they play on behind a frozen canvas.
+  useEffect(() => {
+    if (!isPlaying) preloadedVideos.current.forEach((video) => video.pause());
+  }, [isPlaying]);
 
   useEffect(() => {
     const imagesToPreload = [
@@ -371,24 +446,39 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     const sceneProgress = Math.min(1, Math.max(0, (time - span.start) / Math.max(0.001, span.end - span.start))); // 0 to 1 inside each scene
     const activeScene = sceneList[sceneIndex] || sceneList[0];
 
+    const activeVideo = getSceneVideo(activeScene);
+    if (activeClipSrc.current !== (activeScene?.videoSrc ?? null)) {
+      // Leaving a scene: stop its clip and rewind, so coming back to it starts from the top.
+      preloadedVideos.current.forEach((video, src) => {
+        if (src === activeScene?.videoSrc) return;
+        video.pause();
+        if (video.currentTime !== 0) video.currentTime = 0;
+      });
+      activeClipSrc.current = activeScene?.videoSrc ?? null;
+    }
+    if (activeVideo) syncSceneVideo(activeVideo, time - span.start, isPlayingRef.current);
+
       ctx.clearRect(0, 0, W, H);
 
       // Helper function to draw image centered and cover
-      const drawCoverImage = (img: HTMLImageElement, zoomScale = 1.0, panY = 0) => {
-        const imgRatio = img.naturalWidth / img.naturalHeight;
+      const drawCoverImage = (img: HTMLImageElement | HTMLVideoElement, zoomScale = 1.0, panY = 0) => {
+        // A clip in 3:4 or 16:9 is cropped to the 4:5 frame from the centre, exactly like a photo.
+        const mediaW = (img as HTMLVideoElement).videoWidth || (img as HTMLImageElement).naturalWidth;
+        const mediaH = (img as HTMLVideoElement).videoHeight || (img as HTMLImageElement).naturalHeight;
+        const imgRatio = mediaW / mediaH;
         const targetRatio = W / H;
         let sW, sH, sx, sy;
 
         if (imgRatio > targetRatio) {
-          sH = img.naturalHeight;
-          sW = img.naturalHeight * targetRatio;
-          sx = (img.naturalWidth - sW) / 2;
+          sH = mediaH;
+          sW = mediaH * targetRatio;
+          sx = (mediaW - sW) / 2;
           sy = 0;
         } else {
-          sW = img.naturalWidth;
-          sH = img.naturalWidth / targetRatio;
+          sW = mediaW;
+          sH = mediaW / targetRatio;
           sx = 0;
-          sy = (img.naturalHeight - sH) / 2;
+          sy = (mediaH - sH) / 2;
         }
 
         const scale = 1.0 + (zoomScale - 1.0) * sceneProgress;
@@ -439,7 +529,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
         if (onPhoto) {
           const img = getSceneImage(activeScene, '/scenes/scene1.jpg');
-          if (img && img.complete && img.naturalWidth) drawCoverImage(img, 1.04);
+          if (videoReady(activeVideo)) drawCoverImage(activeVideo);
+          else if (img && img.complete && img.naturalWidth) drawCoverImage(img, 1.04);
           else { ctx.fillStyle = BRAND_COLORS.nearBlack; ctx.fillRect(0, 0, W, H); }
           ctx.fillStyle = 'rgba(24, 22, 20, 0.64)';
           ctx.fillRect(0, 0, W, H);
@@ -550,7 +641,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       else if (!isBrandType(activeScene.type)) {
         const fallbacks = ['/scenes/scene1.jpg', '/scenes/scene2.jpg', '/scenes/scene3_v2.jpg', '/scenes/scene4.jpg'];
         const img = getSceneImage(activeScene, fallbacks[currentSceneIndex % fallbacks.length]);
-        if (img && img.complete && img.naturalWidth) {
+        if (videoReady(activeVideo)) {
+          drawCoverImage(activeVideo); // no slow zoom: the footage already moves
+        } else if (img && img.complete && img.naturalWidth) {
           drawCoverImage(img, 1.08);
         } else {
           ctx.fillStyle = BRAND_COLORS.sand;
