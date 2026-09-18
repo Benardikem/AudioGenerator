@@ -17,6 +17,9 @@ COPY package.json ./
 # The server bundle is built with --packages=external, so it needs node_modules at runtime.
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# Scene video clips live here, on a Docker volume. Created before USER node so the volume is
+# initialised owned by the runtime user; otherwise it arrives owned by root and uploads fail.
+RUN mkdir -p /data/media && chown -R node:node /data
 USER node
 EXPOSE 3000
 CMD ["node", "dist/server.cjs"]
