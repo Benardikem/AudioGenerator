@@ -27,7 +27,7 @@ export const SOCIAL_PRESETS: CommercialPreset[] = [
     timing: '~30-35s',
     suggestedVoice: 'Fenrir_Baritone',
     suggestedStyle: 'pidgin_warm',
-    description: 'Official 4:5 social advert in warm Nigerian Pidgin. Exact 8 scenes with authentic tone.',
+    description: 'Official 4:5 social advert in warm Nigerian Pidgin. Authentic tone.',
     script: DEFAULT_SCRIPT,
   },
   {

@@ -17,6 +17,8 @@ interface EditSceneModalProps {
   isOpen: boolean;
   scene: AdvertScene | null;
   totalScenes?: number;
+  /** e.g. "12s – 18s"; scenes are timed by their spoken lines, so the storyboard works it out. */
+  timeLabel?: string;
   onClose: () => void;
   onSave: (updatedScene: AdvertScene) => void;
   onPreview: (sceneIndex: number) => void;
@@ -36,6 +38,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   isOpen,
   scene,
   totalScenes = 8,
+  timeLabel,
   onClose,
   onSave,
   onPreview,
@@ -115,7 +118,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               <h3 className="text-base font-bold text-[#181614] flex items-center gap-2">
                 Edit Scene {scene.id} of {totalScenes}
                 <span className="text-xs font-mono font-medium text-[#6B6256] bg-[#F4EEE2] px-2 py-0.5 rounded-md">
-                  {(scene.id - 1) * 4}s – {scene.id * 4}s
+                  {timeLabel}
                 </span>
               </h3>
               <p className="text-xs text-[#6B6256]">
@@ -141,9 +144,10 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               {([
                 { id: 'photo', label: 'Photo' },
                 { id: 'text', label: 'Text (fly-in)' },
-                ...(['logo', 'ui_search', 'ui_review', 'end_card'].includes(scene.type)
-                  ? [{ id: scene.type, label: 'LegitAfrica graphic' }]
-                  : []),
+                { id: 'logo', label: 'LegitAfrica: tell them' },
+                { id: 'ui_search', label: 'LegitAfrica: search & review' },
+                { id: 'ui_review', label: 'LegitAfrica: honest reviews' },
+                { id: 'end_card', label: 'LegitAfrica: end card' },
               ] as { id: AdvertScene['type']; label: string }[]).map((opt) => (
                 <button
                   key={opt.id}
@@ -230,7 +234,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               value={voiceLine}
               onChange={(e) => setVoiceLine(e.target.value)}
               rows={2}
-              placeholder="Spoken words for this 4-second beat..."
+              placeholder="Spoken words for this beat. The scene lasts as long as this line takes to say..."
               className="w-full p-3 text-sm bg-[#FBF8F1] border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] focus:border-transparent outline-hidden text-[#181614] font-medium"
             />
           </div>
@@ -259,7 +263,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           </div>
 
           {/* 3. Artwork & Image Selection */}
-          {(sceneType !== 'text' || textBackground === 'photo') && (
+          {(sceneType === 'photo' || sceneType === 'end_card' || (sceneType === 'text' && textBackground === 'photo')) && (
           <div>
             <label className="block text-xs font-bold text-[#181614] mb-1.5">
               Scene Artwork / Background Image

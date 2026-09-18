@@ -33,6 +33,7 @@ import { SocialVideoOverlay } from './components/SocialVideoOverlay';
 import { StoryboardEditor } from './components/StoryboardEditor';
 import { CampaignArchiveView } from './components/CampaignArchiveView';
 import { generateScenesFromScript } from './utils/sceneGenerator';
+import { normalizeScenes, stampScenes, estimateDuration } from './utils/sceneTimeline';
 import { GeneratedCommercial, CommercialPreset, AdvertScene, AspectRatio } from './types';
 import { BRAND_COLORS, ADVERT_SCENES } from './data/advertScenes';
 import {
@@ -57,8 +58,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
 
-  // Synchronized 8 scenes with interactive editing and preview
-  const [scenes, setScenes] = useState<AdvertScene[]>(ADVERT_SCENES);
+  // The ad's scenes, any number of them, each timed by its own spoken line
+  const [scenes, setScenes] = useState<AdvertScene[]>(() => stampScenes(ADVERT_SCENES));
   const [activeSceneIndex, setActiveSceneIndex] = useState(0);
   const [sceneVersion, setSceneVersion] = useState(0);
 
@@ -72,7 +73,7 @@ export default function App() {
   }, []);
 
   const handleUpdateScenes = useCallback((updated: AdvertScene[]) => {
-    setScenes(updated);
+    setScenes(stampScenes(updated));
     setSceneVersion((v) => v + 1);
   }, []);
 
@@ -155,7 +156,7 @@ export default function App() {
       try {
         const parsedScenes = JSON.parse(comm.scenes);
         if (Array.isArray(parsedScenes) && parsedScenes.length > 0) {
-          setScenes(parsedScenes);
+          setScenes(normalizeScenes(parsedScenes));
           setActiveSceneIndex(0);
           setSceneVersion((v) => v + 1);
         }
@@ -207,10 +208,10 @@ export default function App() {
     setActiveCommercialId(null);
     setCampaignTitle(data.title);
     setScript(data.script);
-    const newScenes = data.scenes && data.scenes.length === 8
+    const newScenes = data.scenes && data.scenes.length > 0
       ? data.scenes
       : generateScenesFromScript(data.script, data.title);
-    setScenes(newScenes);
+    setScenes(stampScenes(newScenes));
     if (data.aspectRatio) {
       setAspectRatio(data.aspectRatio);
     }
@@ -378,7 +379,15 @@ export default function App() {
         voice: savedAd.voice,
         timbre: savedAd.timbre ?? selectedTimbre,
         style: savedAd.style,
-        scenes: savedAd.scenes ?? JSON.stringify(scenes),
+        // Compare against the saved scenes as they load, so an older ad converted on opening
+        // doesn't read as having unsaved changes.
+        scenes: (() => {
+          try {
+            return savedAd.scenes ? JSON.stringify(normalizeScenes(JSON.parse(savedAd.scenes))) : JSON.stringify(scenes);
+          } catch {
+            return savedAd.scenes;
+          }
+        })(),
         aspectRatio: savedAd.aspectRatio || '4:5',
         audioUrl: savedAd.audioUrl && savedAd.duration ? savedAd.audioUrl : null,
       })
@@ -747,6 +756,7 @@ export default function App() {
               activeSceneIndex={activeSceneIndex}
               onSelectScene={handleSelectScene}
               onUpdateScene={handleUpdateScenes}
+              duration={activeCommercial?.duration || estimateDuration(script)}
               onSyncToScript={(newScript) => setScript(newScript)}
               onResetScenes={() => handleUpdateScenes(ADVERT_SCENES)}
               onGenerateAudio={handleGenerateAudio}
@@ -800,7 +810,7 @@ export default function App() {
             {playerMode === 'video_overlay' ? (
               <SocialVideoOverlay
                 audioUrl={activeCommercial?.audioUrl}
-                duration={activeCommercial?.duration || 32}
+                duration={activeCommercial?.duration || estimateDuration(script)}
                 script={script}
                 voiceName={activeCommercial?.voiceName || selectedVoiceObj.name}
                 style={activeCommercial?.style || selectedStyle}
@@ -817,7 +827,7 @@ export default function App() {
             ) : (
               <AudioVisualizer
                 audioUrl={activeCommercial?.audioUrl || ''}
-                duration={activeCommercial?.duration || 32}
+                duration={activeCommercial?.duration || estimateDuration(script)}
                 script={script}
                 voiceName={activeCommercial?.voiceName || selectedVoiceObj.name}
                 style={activeCommercial?.style || selectedStyle}

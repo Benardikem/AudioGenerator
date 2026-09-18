@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { sceneTimeline, sceneIndexAt, isBrandType } from '../utils/sceneTimeline';
 import {
   Play,
   Pause,
@@ -144,7 +145,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const [cues, setCues] = useState<SubtitleCue[]>([]);
 
   // Active scene list (custom or default)
-  const sceneList = scenes && scenes.length === 8 ? scenes : ADVERT_SCENES;
+  const sceneList = scenes && scenes.length > 0 ? scenes : ADVERT_SCENES;
 
   // Preload scene imagery
   const preloadedImages = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -199,11 +200,11 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     setCues(calculatedCues);
   }, [script, totalDuration, duration]);
 
-  // Current active scene index (0 through 7)
-  const currentSceneIndex = Math.min(
-    7,
-    Math.max(0, Math.floor((currentTime / (totalDuration || 32)) * 8))
-  );
+  // When each scene starts and ends: proportional to its spoken line, not equal eighths
+  const spans = useMemo(() => sceneTimeline(sceneList, totalDuration || 32), [sceneList, totalDuration]);
+  const spansRef = useRef(spans);
+  spansRef.current = spans;
+  const currentSceneIndex = sceneIndexAt(spans, currentTime);
   const activeScene = sceneList[currentSceneIndex] || sceneList[0];
 
   // Stable references to prevent render loops & canvas tearing
@@ -348,8 +349,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   };
 
   const handleJumpToScene = (sceneIndex: number) => {
-    const sceneDuration = (totalDuration || 32) / 8;
-    handleSeek(sceneIndex * sceneDuration + 0.05);
+    handleSeek((spansRef.current[sceneIndex]?.start ?? 0) + 0.05);
   };
 
   // 1080 x 1350 (4:5) Portrait Canvas Drawing Function (zero flicker)
@@ -364,9 +364,11 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     const time = typeof timeToDraw === 'number' ? timeToDraw : currentTimeRef.current;
     const dur = totalDurationRef.current || 32;
     const progress = dur > 0 ? Math.min(1, Math.max(0, time / dur)) : 0;
-    const sceneIndex = Math.min(7, Math.max(0, Math.floor((time / dur) * 8)));
+    const drawSpans = spansRef.current;
+    const sceneIndex = Math.min(sceneList.length - 1, sceneIndexAt(drawSpans, time));
     const currentSceneIndex = sceneIndex;
-    const sceneProgress = (progress * 8) % 1; // 0 to 1 inside each scene
+    const span = drawSpans[sceneIndex] || { start: 0, end: dur };
+    const sceneProgress = Math.min(1, Math.max(0, (time - span.start) / Math.max(0.001, span.end - span.start))); // 0 to 1 inside each scene
     const activeScene = sceneList[sceneIndex] || sceneList[0];
 
       ctx.clearRect(0, 0, W, H);
@@ -425,7 +427,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       // promo. A label fades in, then each line rises from behind its own edge, one after another.
       // ----------------------------------------------------
       const drawFlyInText = () => {
-        const sceneDur = dur / 8;
+        const sceneDur = span.end - span.start;
         const t = sceneProgress * sceneDur; // seconds into this scene
         const onPhoto = activeScene.textBackground === 'photo';
         const FONT = '-apple-system, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif';
@@ -540,14 +542,14 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENES 1-4: the ad's own photo. These used to draw fixed graphics from the first campaign
+      // PHOTO SCENES: the ad's own photo. Scenes 1-4 These used to draw fixed graphics from the first campaign
       // (a ₦45,000 debit alert, a named tailor shop, a "Seller (Vendor)" call card, a WhatsApp
       // chat) over whatever photo was chosen, so every ad looked like that one. Now each is the
       // photo alone, with a slow zoom and shading that keeps the watermark and captions readable.
       // ----------------------------------------------------
-      else if (currentSceneIndex <= 3) {
+      else if (!isBrandType(activeScene.type)) {
         const fallbacks = ['/scenes/scene1.jpg', '/scenes/scene2.jpg', '/scenes/scene3_v2.jpg', '/scenes/scene4.jpg'];
-        const img = getSceneImage(sceneList[currentSceneIndex], fallbacks[currentSceneIndex]);
+        const img = getSceneImage(activeScene, fallbacks[currentSceneIndex % fallbacks.length]);
         if (img && img.complete && img.naturalWidth) {
           drawCoverImage(img, 1.08);
         } else {
@@ -567,10 +569,10 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENE 5: Official LegitAfrica Brand Asset Layout (4:5 1080x1350)
+      // 'logo' SCENE: Official LegitAfrica Brand Asset Layout (4:5 1080x1350)
       // "Abeg, tell that person wetin you know. For Legit Africa."
       // ----------------------------------------------------
-      else if (currentSceneIndex === 4) {
+      else if (activeScene.type === 'logo') {
         // Strict Brand Main Background: Cream #FBF8F1
         ctx.fillStyle = BRAND_COLORS.cream;
         ctx.fillRect(0, 0, W, H);
@@ -659,9 +661,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENE 6: Phone screen — searching a business name, tapping gold stars, typing a short review
+      // 'ui_search' SCENE: Phone screen — searching a business name, tapping gold stars, typing a short review
       // ----------------------------------------------------
-      else if (currentSceneIndex === 5) {
+      else if (activeScene.type === 'ui_search') {
         // Light sand second background
         ctx.fillStyle = BRAND_COLORS.sand;
         ctx.fillRect(0, 0, W, H);
@@ -743,10 +745,10 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENE 7: Official Brand Asset Layout (4:5 1080x1350)
+      // 'ui_review' SCENE: Official Brand Asset Layout (4:5 1080x1350)
       // "No business fit pay us to comot honest review."
       // ----------------------------------------------------
-      else if (currentSceneIndex === 6) {
+      else if (activeScene.type === 'ui_review') {
         // Retain the off-white/cream background color (#FBF8F1)
         ctx.fillStyle = BRAND_COLORS.cream;
         ctx.fillRect(0, 0, W, H);
@@ -926,7 +928,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // SCENE 8: Official End Card
+      // 'end_card' SCENE (anything left): Official End Card
       // End card: LegitAfrica logo, "legitafrica.com", and underneath:
       // "Trusted businesses · Verified reviews · Always free to read"
       // ----------------------------------------------------
@@ -1151,7 +1153,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       ctx.fillStyle = BRAND_COLORS.gold;
       ctx.fillRect(60, H - 24, (W - 120) * progress, 8);
     },
-    [sceneList, cues, subtitlesEnabled, subtitleStyle, showActionOverlay]
+    [sceneList, cues, subtitlesEnabled, subtitleStyle, showActionOverlay, spans]
   );
 
   // Render static frame when paused or when time/scene/subtitles change
@@ -1166,12 +1168,11 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     if (
       typeof externalSceneIndex === 'number' &&
       externalSceneIndex >= 0 &&
-      externalSceneIndex <= 7
+      externalSceneIndex < sceneList.length
     ) {
       lastExternalSceneRef.current = externalSceneIndex;
       lastNotifiedSceneRef.current = externalSceneIndex;
-      const sceneDuration = (totalDuration || 32) / 8;
-      const targetTime = externalSceneIndex * sceneDuration + 0.05;
+      const targetTime = (spansRef.current[externalSceneIndex]?.start ?? 0) + 0.05;
       if (audioRef.current && audioUrl) {
         audioRef.current.currentTime = targetTime;
       }
@@ -1572,7 +1573,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               </div>
             </div>
             <p className="text-xs text-[#6B6256]">
-              Nigerian Pidgin Voiceover • 8 Synchronized Scenes • Burned-in Captions
+              Nigerian Pidgin Voiceover • {sceneList.length} Synchronized Scenes • Burned-in Captions
             </p>
           </div>
         </div>
@@ -1698,19 +1699,19 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                   <span>Redraw</span>
                 </button>
                 <span className="text-[11px] font-bold text-[#E8A317]">
-                  Scene {currentSceneIndex + 1} of 8
+                  Scene {currentSceneIndex + 1} of {sceneList.length}
                 </span>
               </div>
             </div>
-            <div className="grid grid-cols-8 gap-1">
-              {[0, 1, 2, 3, 4, 5, 6, 7].map((sIdx) => {
+            <div className="flex flex-wrap gap-1">
+              {sceneList.map((_, sIdx) => {
                 const isActive = currentSceneIndex === sIdx;
                 return (
                   <button
                     key={sIdx}
                     type="button"
                     onClick={() => handleJumpToScene(sIdx)}
-                    className={`py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                    className={`py-1 min-w-[40px] flex-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#E8A317] text-[#181614] border-[#E8A317] shadow-xs ring-1 ring-[#E8A317]'
                         : 'bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] border-[#EAE3D4]'
@@ -1762,7 +1763,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 </div>
 
                 <p className="text-sm font-bold text-white mb-1">Exporting Commercial Video</p>
-                <p className="text-xs text-[#EAE3D4] mb-3">{recordingStatusText || 'Packaging 8 Scenes with Voiceover'}</p>
+                <p className="text-xs text-[#EAE3D4] mb-3">{recordingStatusText || `Packaging ${sceneList.length} Scenes with Voiceover`}</p>
 
                 {/* Progress bar */}
                 <div className="w-full max-w-[220px] bg-white/20 rounded-full h-3 overflow-hidden mb-1.5">
@@ -1992,24 +1993,24 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           </div>
         </div>
 
-        {/* Right: 8 Synchronized Scenes & Visual Storyboard */}
+        {/* Right: Synchronized Scenes & Visual Storyboard */}
         <div className="lg:col-span-7 space-y-5">
           <div className="flex items-center justify-between border-b border-[#EAE3D4] pb-3">
             <div>
               <h4 className="text-sm font-bold text-[#181614] flex items-center gap-2">
                 <Layers className="w-4 h-4 text-[#E8A317]" />
-                8 Synchronized Storyboard Scenes (30–35s)
+                {sceneList.length} Storyboard Scenes
               </h4>
               <p className="text-xs text-[#6B6256]">
                 Click any scene to jump playback directly to that visual moment.
               </p>
             </div>
             <div className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-[#F4EEE2] text-[#181614] border border-[#EAE3D4]">
-              Active: Scene {currentSceneIndex + 1} of 8
+              Active: Scene {currentSceneIndex + 1} of {sceneList.length}
             </div>
           </div>
 
-          {/* List of 8 Scenes */}
+          {/* Scene list */}
           <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
             {sceneList.map((scene, idx) => {
               const isActive = currentSceneIndex === idx;
@@ -2052,7 +2053,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                         )}
                       </div>
                       <span className="text-[10px] text-[#6B6256] font-mono shrink-0">
-                        {idx * 4}s–{(idx + 1) * 4}s
+                        {Math.round(spans[idx]?.start ?? 0)}s–{Math.round(spans[idx]?.end ?? 0)}s
                       </span>
                     </div>
 

@@ -9,6 +9,9 @@ import { createServer as createViteServer } from "vite";
 import { installAuth } from "./auth";
 import { installCommercialsApi } from "./commercialsStore";
 
+/** Keep in step with MAX_SCENES in src/utils/sceneTimeline.ts. */
+const MAX_SCENES = 24;
+
 dotenv.config();
 
 const app = express();
@@ -363,7 +366,7 @@ Return ONLY the final spoken voiceover script. Do not include sound effects in b
   }
 });
 
-// Generate a full commercial campaign (title, script, 8 scenes) from a user topic or prompt
+// Generate a full commercial campaign (title, script, storyboard scenes) from a user topic or prompt
 app.post("/api/create-ad-campaign", async (req, res) => {
   const { topic = "", style = "pidgin_warm", businessType = "General" } = req.body;
 
@@ -406,11 +409,15 @@ Generate a JSON object with:
    - The dilemma or vendor scenario
    - The solution: Search the business on Legit Africa dot com before paying
    - Punchy call to action: "Search the business. Say wetin happen, good or bad. Legit Africa dot com. E free!"
-3. "scenes": An array of exactly 8 scene objects representing an 8-beat video storyboard:
-   - "id": 1 through 8
-   - "voiceLine": A short phrase from the script corresponding to this scene beat
+3. "scenes": One scene object per line of the script, in the same order as the lines. Use as many scenes as the script has lines (never more than ${MAX_SCENES}):
+   - "id": 1, 2, 3 ... counting up
+   - "voiceLine": the script line spoken over this scene, word for word
    - "visualPrompt": A descriptive camera/visual direction for what is shown on screen
-   - "type": One of: "photo", "photo", "photo", "photo", "ui_search", "ui_review", "logo", "end_card" (matching scenes 1-8 respectively)
+   - "type": "photo" for an ordinary shot, and these LegitAfrica screens where the line calls for them:
+     "ui_search" for the line telling the viewer to search the business on Legit Africa,
+     "ui_review" for the line about honest reviews that cannot be paid off,
+     "logo" for the line asking the viewer to tell others what happened,
+     "end_card" for the final line. The last scene must be "end_card".
 
 Output ONLY valid JSON without Markdown blocks or extra text:
 {
@@ -438,29 +445,29 @@ Output ONLY valid JSON without Markdown blocks or extra text:
       data = JSON.parse(cleaned);
     }
 
-    const fallbackImages: Record<number, string> = {
-      1: "/scenes/scene1.jpg",
-      2: "/scenes/scene2.jpg",
-      3: "/scenes/scene3.jpg",
-      4: "/scenes/scene3_v2.jpg",
-      5: "/brand/logo-clean.png",
-      6: "/brand/legitafrica-icon-transparent.png",
-      7: "/brand/legitafrica-icon-transparent.png",
-      8: "/brand/logo-clean.png",
+    const photoImages = ["/scenes/scene1.jpg", "/scenes/scene2.jpg", "/scenes/scene3.jpg", "/scenes/scene3_v2.jpg"];
+    const brandImages: Record<string, string> = {
+      ui_search: "/brand/logo-clean.png",
+      ui_review: "/brand/legitafrica-icon-transparent.png",
+      logo: "/brand/legitafrica-icon-transparent.png",
+      end_card: "/brand/logo-clean.png",
     };
+    const SCENE_TYPES = ["photo", "text", "logo", "ui_search", "ui_review", "end_card"];
 
-    const formattedScenes = (data.scenes || []).map((s: any, idx: number) => {
-      const id = s.id || idx + 1;
+    let photoCount = 0;
+    const formattedScenes = (data.scenes || []).slice(0, MAX_SCENES).map((s: any, idx: number) => {
+      const type = SCENE_TYPES.includes(s.type) ? s.type : "photo";
       return {
-        id,
+        id: idx + 1,
         voiceLine: s.voiceLine || "",
-        visualPrompt: s.visualPrompt || `Scene ${id} camera direction.`,
-        type: s.type || (id <= 4 ? "photo" : id === 5 ? "ui_search" : id === 6 ? "ui_review" : id === 7 ? "logo" : "end_card"),
-        imageSrc: fallbackImages[id] || "/scenes/scene1.jpg",
+        visualPrompt: s.visualPrompt || `Scene ${idx + 1} camera direction.`,
+        type,
+        imageSrc: brandImages[type] || photoImages[photoCount++ % photoImages.length],
+        layoutVersion: 2,
       };
     });
 
-    if (formattedScenes.length === 8 && data.title && data.script) {
+    if (formattedScenes.length > 0 && data.title && data.script) {
       return res.json({
         title: data.title,
         script: data.script,
@@ -473,7 +480,7 @@ Output ONLY valid JSON without Markdown blocks or extra text:
     if (!data.title || !data.script) {
       return res.status(502).json({ error: "The AI returned an incomplete ad. Please try again." });
     }
-    res.json({ title: data.title, script: data.script, scenes: formattedScenes.length === 8 ? formattedScenes : undefined });
+    res.json({ title: data.title, script: data.script, scenes: formattedScenes.length > 0 ? formattedScenes : undefined });
   } catch (error: any) {
     console.error("AI campaign generation error:", error);
     const { status, message } = geminiError(error, "The ad could not be generated. Please try again.");

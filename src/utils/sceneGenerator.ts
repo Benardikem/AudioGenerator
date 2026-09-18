@@ -1,8 +1,10 @@
 import { AdvertScene } from '../types';
+import { MAX_SCENES, stampScenes } from './sceneTimeline';
 
 /**
- * Intelligently generates or parses an 8-scene synchronized video storyboard
- * from any script or prompt description, with detailed Visual Prompts and Action Descriptions.
+ * Builds a storyboard from a script: one scene per line, so a long story gets as many scenes as
+ * it has beats instead of being squeezed into eight. Each scene gets a visual prompt suited to the
+ * scenario the script is about.
  */
 export function generateScenesFromScript(
   scriptText: string,
@@ -37,25 +39,17 @@ export function generateScenesFromScript(
   const isHousing = scenario === 'housing';
   const isAuto = scenario === 'auto';
 
-  // Split lines into 8 beats
-  let voiceLines: string[] = [];
-  if (rawLines.length === 8) {
-    voiceLines = rawLines;
-  } else if (rawLines.length > 8) {
-    // Merge into 8 chunks
-    const chunkSize = Math.ceil(rawLines.length / 8);
-    for (let i = 0; i < 8; i++) {
-      const slice = rawLines.slice(i * chunkSize, (i + 1) * chunkSize);
-      voiceLines.push(slice.join(' '));
+  // One scene per line of script. Only a script longer than the cap is merged, pairing lines
+  // from the start until it fits.
+  let voiceLines: string[] = rawLines;
+  while (voiceLines.length > MAX_SCENES) {
+    const merged: string[] = [];
+    for (let i = 0; i < voiceLines.length; i += 2) {
+      merged.push(voiceLines.slice(i, i + 2).join(' '));
     }
-  } else if (rawLines.length > 0) {
-    // If fewer lines, distribute them across 8 beats with sensible cadence
-    const totalLines = rawLines.length;
-    for (let i = 0; i < 8; i++) {
-      const lineIndex = Math.floor((i / 8) * totalLines);
-      voiceLines.push(rawLines[lineIndex] || rawLines[rawLines.length - 1]);
-    }
-  } else {
+    voiceLines = merged;
+  }
+  if (voiceLines.length === 0) {
     voiceLines = [
       'You don already pay. So you sabi wetin happen.',
       'Maybe you bought phone or gadget sharp sharp.',
@@ -293,11 +287,42 @@ export function generateScenesFromScript(
     ];
   }
 
-  return voiceLines.map((voiceLine, idx) => ({
-    id: idx + 1,
-    voiceLine: voiceLine || `Scene ${idx + 1}`,
-    visualPrompt: sceneTemplates[idx]?.visualPrompt || `Scene ${idx + 1} camera direction.`,
-    imageSrc: sceneTemplates[idx]?.imageSrc || '/scenes/scene1.jpg',
-    type: sceneTemplates[idx]?.type || (idx < 4 ? 'photo' : idx === 4 ? 'ui_search' : idx === 5 ? 'ui_review' : idx === 6 ? 'logo' : 'end_card'),
-  }));
+  // Which scenes show a LegitAfrica screen rather than a photo: the line that tells you to search,
+  // the line about honest reviews, the line asking you to tell someone, and the closing line.
+  const last = voiceLines.length - 1;
+  const types: AdvertScene['type'][] = voiceLines.map(() => 'photo');
+  types[last] = 'end_card';
+
+  const claim = (pattern: RegExp, type: AdvertScene['type']) => {
+    for (let i = last - 1; i >= 0; i--) {
+      if (types[i] === 'photo' && pattern.test(voiceLines[i].toLowerCase())) {
+        types[i] = type;
+        return i;
+      }
+    }
+    return -1;
+  };
+  const searchAt = claim(/\b(search|check|legit ?africa|legitafrica)\b/, 'ui_search');
+  claim(/\b(review|reviews|honest|comot|remove|pay us)\b/, 'ui_review');
+  claim(/\b(tell|yarn|warn|share)\b/, 'logo');
+  if (searchAt === -1 && voiceLines.length >= 4) types[last - 1] = 'ui_search';
+
+  const brandTemplate = (type: AdvertScene['type']) => sceneTemplates.find((t) => t.type === type);
+  const photoTemplates = sceneTemplates.filter((t) => t.type === 'photo');
+  let photoCount = 0;
+
+  return stampScenes(
+    voiceLines.map((voiceLine, idx) => {
+      const type = types[idx];
+      const template =
+        type === 'photo' ? photoTemplates[photoCount++ % photoTemplates.length] : brandTemplate(type);
+      return {
+        id: idx + 1,
+        voiceLine: voiceLine || `Scene ${idx + 1}`,
+        visualPrompt: template?.visualPrompt || `Scene ${idx + 1} camera direction.`,
+        imageSrc: template?.imageSrc || '/scenes/scene1.jpg',
+        type,
+      };
+    })
+  );
 }

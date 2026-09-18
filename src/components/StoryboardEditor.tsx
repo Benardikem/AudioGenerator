@@ -16,7 +16,12 @@ import {
   Image as ImageIcon,
   Camera,
   Film,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Plus,
 } from 'lucide-react';
+import { sceneTimeline, MAX_SCENES } from '../utils/sceneTimeline';
 import { AdvertScene } from '../types';
 import { BRAND_COLORS, ADVERT_SCENES } from '../data/advertScenes';
 import { EditSceneModal } from './EditSceneModal';
@@ -31,6 +36,8 @@ interface StoryboardEditorProps {
   onGenerateAudio?: () => void;
   isGeneratingAudio?: boolean;
   onGenerateScenesFromCurrentScript?: () => void;
+  /** Voiceover length in seconds, used to time the scenes. */
+  duration?: number;
 }
 
 export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
@@ -43,7 +50,37 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
   onGenerateAudio,
   isGeneratingAudio = false,
   onGenerateScenesFromCurrentScript,
+  duration = 32,
 }) => {
+  const spans = sceneTimeline(scenes, duration);
+  const timeLabel = (idx: number) =>
+    `${Math.round(spans[idx]?.start ?? 0)}s – ${Math.round(spans[idx]?.end ?? 0)}s`;
+
+  // Ids follow order; App renumbers too, but doing it here keeps the edit modal's lookups right.
+  const replaceScenes = (next: AdvertScene[]) => onUpdateScene(next.map((s, i) => ({ ...s, id: i + 1 })));
+  const addSceneAfter = (idx: number) => {
+    if (scenes.length >= MAX_SCENES) return;
+    const blank: AdvertScene = { id: idx + 2, voiceLine: '', visualPrompt: '', imageSrc: '/scenes/scene1.jpg', type: 'photo' };
+    replaceScenes([...scenes.slice(0, idx + 1), blank, ...scenes.slice(idx + 1)]);
+    setModalScene(blank);
+    setIsModalOpen(true);
+    onSelectScene(idx + 1);
+  };
+  const removeScene = (idx: number) => {
+    if (scenes.length <= 1) return;
+    if (!window.confirm(`Delete scene ${idx + 1}?`)) return;
+    replaceScenes(scenes.filter((_, i) => i !== idx));
+    onSelectScene(Math.max(0, Math.min(idx, scenes.length - 2)));
+  };
+  const moveScene = (idx: number, dir: -1 | 1) => {
+    const j = idx + dir;
+    if (j < 0 || j >= scenes.length) return;
+    const next = [...scenes];
+    [next[idx], next[j]] = [next[j], next[idx]];
+    replaceScenes(next);
+    onSelectScene(j);
+  };
+
   const [modalScene, setModalScene] = useState<AdvertScene | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
@@ -89,13 +126,13 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
         <div>
           <div className="flex items-center gap-2 text-xs font-bold text-[#C6860C] uppercase tracking-wider mb-1">
             <Camera className="w-4 h-4 text-[#E8A317]" />
-            <span>8-Beat Synchronized Visual Storyboard</span>
+            <span>Visual Storyboard · {scenes.length} scene{scenes.length === 1 ? '' : 's'}</span>
           </div>
           <h2 className="text-xl font-bold text-[#181614]">
             Visual Prompts, Camera Actions & Scene Imagery
           </h2>
           <p className="text-xs text-[#6B6256] mt-0.5">
-            Every scene features its own tailored camera direction, actor action, and visual prompt. Click any scene to edit in a focused modal.
+            Add, remove and reorder scenes. Each one lasts as long as its spoken line.
           </p>
         </div>
 
@@ -105,7 +142,7 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
               type="button"
               onClick={onGenerateScenesFromCurrentScript}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold transition-all cursor-pointer border border-[#EAE3D4]"
-              title="Automatically generate 8 scenes matching the script in the Script Editor"
+              title="Rebuild the scenes from the script: one scene per line"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#E8A317]" />
               <span>Auto-Sync Scenes from Script</span>
@@ -157,7 +194,7 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
             Active: Scene {activeSceneIndex + 1} of {scenes.length}
           </span>
         </div>
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+        <div className="flex flex-wrap gap-2">
           {scenes.map((scene, idx) => {
             const isActive = activeSceneIndex === idx;
             return (
@@ -165,21 +202,21 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
                 key={scene.id}
                 type="button"
                 onClick={() => onSelectScene(idx)}
-                className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
+                className={`py-2 px-1 min-w-[76px] flex-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                   isActive
                     ? 'bg-[#E8A317] text-[#181614] border-[#E8A317] shadow-xs'
                     : 'bg-[#FBF8F1] hover:bg-[#F4EEE2] text-[#6B6256] border-[#EAE3D4]'
                 }`}
               >
                 <span>Scene {scene.id}</span>
-                <span className="text-[10px] font-mono opacity-80">{idx * 4}s</span>
+                <span className="text-[10px] font-mono opacity-80">{Math.round(spans[idx]?.start ?? 0)}s</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* 8 Detailed Storyboard Scene Cards */}
+      {/* Scene cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {scenes.map((scene, idx) => {
           const isActive = activeSceneIndex === idx;
@@ -210,11 +247,38 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
                       Scene {scene.id}
                     </span>
                     <span className="text-[10px] text-[#6B6256] font-mono bg-[#F4EEE2] px-2 py-0.5 rounded-md">
-                      {idx * 4}s – {(idx + 1) * 4}s
+                      {timeLabel(idx)}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => moveScene(idx, -1)}
+                      disabled={idx === 0}
+                      className="p-1 rounded-lg text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2] disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                      title="Move scene earlier"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveScene(idx, 1)}
+                      disabled={idx === scenes.length - 1}
+                      className="p-1 rounded-lg text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2] disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                      title="Move scene later"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeScene(idx)}
+                      disabled={scenes.length <= 1}
+                      className="p-1 rounded-lg text-[#6B6256] hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:cursor-default cursor-pointer"
+                      title="Delete scene"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => onSelectScene(idx)}
@@ -282,11 +346,27 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
         })}
       </div>
 
+      <div className="flex flex-col items-center gap-1">
+        <button
+          type="button"
+          onClick={() => addSceneAfter(scenes.length - 1)}
+          disabled={scenes.length >= MAX_SCENES}
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white hover:bg-[#F4EEE2] disabled:opacity-50 disabled:cursor-default text-[#181614] text-xs font-bold border border-dashed border-[#DACFBE] transition-colors cursor-pointer"
+        >
+          <Plus className="w-4 h-4 text-[#E8A317]" />
+          Add scene
+        </button>
+        <span className="text-[11px] text-[#6B6256]">
+          {scenes.length} of {MAX_SCENES} scenes. Use the arrows on a scene to move it.
+        </span>
+      </div>
+
       {/* Edit Scene Focused Modal */}
       <EditSceneModal
         isOpen={isModalOpen}
         scene={modalScene}
         totalScenes={scenes.length}
+        timeLabel={modalScene ? timeLabel(modalScene.id - 1) : undefined}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveModalScene}
         onPreview={onSelectScene}

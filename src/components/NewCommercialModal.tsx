@@ -139,7 +139,7 @@ export const NewCommercialModal: React.FC<NewCommercialModalProps> = ({
       }
 
       const data = await response.json();
-      const generatedScenes = data.scenes && data.scenes.length === 8
+      const generatedScenes = data.scenes && data.scenes.length > 0
         ? data.scenes
         : generateScenesFromScript(data.script || topicInput, data.title);
 

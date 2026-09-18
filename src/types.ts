@@ -84,6 +84,8 @@ export interface AdvertScene {
   headline?: string;
   /** type 'text': plain cream background (default), or the scene photo darkened behind the text. */
   textBackground?: 'cream' | 'photo';
+  /** 2 = drawn by type, any number of scenes. Absent on ads saved when scenes were drawn by position. */
+  layoutVersion?: 2;
 }
 
 export type AspectRatio = '4:5' | '9:16';

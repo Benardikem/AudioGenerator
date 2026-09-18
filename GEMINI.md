@@ -50,9 +50,15 @@ in production the server refuses to start without it.
 
 ## Scenes belong to the ad being made
 
-- Scenes 1-4 in `SocialVideoOverlay.tsx` draw only the scene's own photo. They used to draw fixed
-  graphics from the first campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card,
-  a WhatsApp chat) on top of every ad's photos. Do not add campaign-specific graphics back into
-  the scene drawing; put them in a photo or a Text scene instead.
-- A scene with `type: 'text'` is a fly-in headline card (eyebrow, headline with `*gold*` words,
-  cream or photo background). It overrides the position-based drawing for any scene 1-8.
+- An ad has **any number of scenes**, up to 24, and each scene lasts as long as its own spoken
+  line. Do not reintroduce a fixed count of eight or equal-length scenes. The timing rules live in
+  `src/utils/sceneTimeline.ts` and are used by the storyboard, the preview and the export.
+- A scene is drawn from its `type`, never from its position: `photo`, `text` (a fly-in headline
+  card with eyebrow, `*gold*` words, cream or photo background), and the LegitAfrica screens
+  `logo`, `ui_search`, `ui_review`, `end_card`.
+- Ads saved before this change have no `layoutVersion` and were drawn by position. `normalizeScenes`
+  converts them on opening so they still look the same. Do not remove it.
+- Photo scenes draw only the scene's own photo. They used to draw fixed graphics from the first
+  campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card, a WhatsApp chat) on top
+  of every ad's photos. Do not add campaign-specific graphics back into the scene drawing; put them
+  in a photo or a Text scene instead.
