@@ -23,18 +23,34 @@ export interface SceneSpan {
 }
 
 /**
- * Start and end time of every scene. Each scene's share of the voiceover matches its share of the
- * words, with a floor of four words so a label-only or silent scene still gets about two seconds.
+ * Start and end time of every scene.
+ *
+ * A scene with `lengthSeconds` holds for exactly that long: word counts are a guess at where the
+ * words fall in the voiceover, and a line delivered with pauses — "Three hundred thousand naira.
+ * Gone." — takes far longer to say than its length on the page suggests. Whatever is left over is
+ * shared between the remaining scenes in proportion to how much is spoken in each, with a floor of
+ * four words so a label-only or silent scene still gets about two seconds.
  */
 export function sceneTimeline(scenes: AdvertScene[], total: number): SceneSpan[] {
   if (scenes.length === 0) return [];
-  const weights = scenes.map((s) => Math.max(4, wordCount(s.voiceLine)));
-  const sum = weights.reduce((a, b) => a + b, 0);
+
+  const fixed = scenes.map((s) =>
+    typeof s.lengthSeconds === 'number' && s.lengthSeconds > 0 ? s.lengthSeconds : null
+  );
+  const fixedTotal = fixed.reduce((sum: number, f) => sum + (f ?? 0), 0);
+  // Set lengths that overrun the voiceover are scaled back together, rather than pushing the last
+  // scenes off the end of the advert.
+  const squeeze = fixedTotal > total ? total / fixedTotal : 1;
+
+  const weights = scenes.map((s, i) => (fixed[i] === null ? Math.max(4, wordCount(s.voiceLine)) : 0));
+  const weightTotal = weights.reduce((a, b) => a + b, 0);
+  const free = Math.max(0, total - fixedTotal * squeeze);
+
   let t = 0;
-  return weights.map((w, i) => {
+  return scenes.map((_, i) => {
     const start = t;
-    t += (total * w) / sum;
-    return { start, end: i === weights.length - 1 ? total : t };
+    t += fixed[i] !== null ? fixed[i]! * squeeze : weightTotal > 0 ? (free * weights[i]) / weightTotal : 0;
+    return { start, end: i === scenes.length - 1 ? total : t };
   });
 }
 

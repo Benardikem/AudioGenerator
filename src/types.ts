@@ -88,6 +88,11 @@ export interface AdvertScene {
   videoSrc?: string;
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */
   clipFit?: 'slow' | 'loop' | 'hold';
+  /**
+   * How long this scene holds, in seconds. Unset means it shares the voiceover with the other
+   * unset scenes in proportion to how much is spoken in each.
+   */
+  lengthSeconds?: number;
   /** 2 = drawn by type, any number of scenes. Absent on ads saved when scenes were drawn by position. */
   layoutVersion?: 2;
 }

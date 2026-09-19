@@ -78,6 +78,10 @@ in production the server refuses to start without it.
   played in slow motion so nothing repeats), `loop` or `hold` (freeze on the last frame). The rule
   lives in `clipFrameAt` in `src/utils/sceneTimeline.ts`; keep it there rather than inlining timing
   maths in the canvas drawing.
+- A scene can hold for a set number of seconds (`lengthSeconds`) instead of taking a share of the
+  voiceover by word count. Word counts only guess where words fall in the audio — a line said with
+  pauses runs far longer — so this override must stay available; the rest of the voiceover is
+  shared out between the scenes that have no set length.
 
 - Photo scenes draw only the scene's own photo. They used to draw fixed graphics from the first
   campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card, a WhatsApp chat) on top

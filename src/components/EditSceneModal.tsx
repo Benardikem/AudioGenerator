@@ -59,6 +59,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [clipError, setClipError] = useState<string | null>(null);
   const [clipLibrary, setClipLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
   const [clipFit, setClipFit] = useState<'slow' | 'loop' | 'hold'>('slow');
+  const [lengthSeconds, setLengthSeconds] = useState('');
 
   useEffect(() => {
     if (scene) {
@@ -71,6 +72,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setTextBackground(scene.textBackground || 'cream');
       setVideoSrc(scene.videoSrc || '');
       setClipFit(scene.clipFit || 'slow');
+      setLengthSeconds(scene.lengthSeconds ? String(scene.lengthSeconds) : '');
       setClipError(null);
     }
   }, [scene]);
@@ -156,6 +158,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       imageSrc: imageSrc.trim() || scene.imageSrc,
       videoSrc: videoSrc.trim() || undefined,
       ...(videoSrc.trim() ? { clipFit } : {}),
+      lengthSeconds: Number(lengthSeconds) > 0 ? Number(lengthSeconds) : undefined,
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -317,6 +320,41 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               placeholder="e.g. Medium close-up of a buyer unboxing a gadget in Ikeja, looking disappointed as battery indicator shows 0%..."
               className="w-full p-3 text-xs bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] focus:border-transparent outline-hidden text-[#181614]"
             />
+          </div>
+
+          {/* Scene length */}
+          <div>
+            <label className="block text-xs font-bold text-[#181614] mb-1.5">How long this scene holds</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLengthSeconds('')}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                  lengthSeconds === ''
+                    ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                    : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                }`}
+              >
+                Automatic
+              </button>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min="0.5"
+                  step="0.5"
+                  value={lengthSeconds}
+                  onChange={(e) => setLengthSeconds(e.target.value)}
+                  placeholder="e.g. 7"
+                  className="w-24 p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+                />
+                <span className="text-[11px] font-semibold text-[#6B6256]">seconds</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-[#6B6256] mt-1.5">
+              Automatic shares the voiceover out by how much is spoken in each scene, which is a guess:
+              a line said with pauses takes longer than its length suggests. Set the seconds yourself when
+              a scene has to match what you hear. The other automatic scenes take up the rest.
+            </p>
           </div>
 
           {/* 3. Artwork & Image Selection */}
