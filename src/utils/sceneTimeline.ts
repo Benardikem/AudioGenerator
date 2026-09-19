@@ -64,16 +64,18 @@ export function clipFrameAt(
   timeIntoScene: number,
   sceneDuration: number,
   fit: ClipFit = 'slow'
-): { rate: number; time: number } {
-  if (!clipDuration || !isFinite(clipDuration) || clipDuration <= 0) return { rate: 1, time: 0 };
+): { rate: number; time: number; ended: boolean } {
+  if (!clipDuration || !isFinite(clipDuration) || clipDuration <= 0) return { rate: 1, time: 0, ended: false };
 
   // Below about half speed the motion starts to judder, so the rest is held instead.
   const rate = fit === 'slow' && clipDuration < sceneDuration ? Math.max(0.5, clipDuration / sceneDuration) : 1;
   const reached = Math.max(0, timeIntoScene) * rate;
-  if (reached < clipDuration) return { rate, time: reached };
+  if (reached < clipDuration) return { rate, time: reached, ended: false };
   return {
     rate,
     time: fit === 'loop' ? reached % clipDuration : Math.max(0, clipDuration - 0.05),
+    // Played out: 'loop' starts again, the others stop on the final frame.
+    ended: fit !== 'loop',
   };
 }
 

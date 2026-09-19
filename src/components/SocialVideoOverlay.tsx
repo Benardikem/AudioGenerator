@@ -166,7 +166,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       video = document.createElement('video');
       video.src = src;
       video.muted = true;
-      video.loop = true;
+      // Looping is decided per scene in syncSceneVideo. Left on, the element would wrap round on
+      // its own and fight a scene set to hold its last frame.
+      video.loop = false;
       video.playsInline = true;
       video.preload = 'auto';
       const redraw = () => {
@@ -201,8 +203,17 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     playing: boolean
   ) => {
     if (!video.duration || !isFinite(video.duration) || video.duration <= 0) return;
-    const { rate, time: want } = clipFrameAt(video.duration, timeIntoScene, sceneDuration, fit);
+    const { rate, time: want, ended } = clipFrameAt(video.duration, timeIntoScene, sceneDuration, fit);
     if (video.playbackRate !== rate) video.playbackRate = rate;
+    if (video.loop !== (fit === 'loop')) video.loop = fit === 'loop';
+
+    // Played out and holding: park it on the last frame rather than letting it run to the end
+    // again and again.
+    if (ended) {
+      if (!video.paused) video.pause();
+      if (Math.abs(video.currentTime - want) > 0.05) video.currentTime = want;
+      return;
+    }
     if (playing) {
       if (video.paused) video.play().catch(() => {});
       // Only correct real drift: nudging it every frame would stutter the picture.
