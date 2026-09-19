@@ -165,11 +165,149 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     onClose();
   };
 
+  // Kept as a value so the artwork controls can be placed once, wherever they read best.
+  const artworkSection =
+    sceneType === 'photo' || sceneType === 'end_card' || (sceneType === 'text' && textBackground === 'photo') ? (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-[#181614]">
+                Scene Artwork / Background Image
+              </label>
+
+              {/* What this scene shows, with the ways to change it beside it */}
+              <div className="flex items-start gap-3">
+                <div className="w-16 h-20 rounded-xl overflow-hidden border border-[#E8A317] shrink-0 bg-[#F4EEE2] shadow-2xs">
+                  {imageSrc ? (
+                    <img
+                      src={imageSrc}
+                      alt="Scene preview"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[#6B6256]">
+                      <ImageIcon className="w-6 h-6" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 flex-1 min-w-0">
+                  <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4] text-center">
+                    <Upload className="w-3.5 h-3.5 text-[#E8A317] shrink-0" />
+                    <span className="truncate">{uploading ? 'Uploading...' : 'Upload Photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleFileUpload}
+                      disabled={uploading}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4] text-center">
+                    <Video className="w-3.5 h-3.5 text-[#E8A317] shrink-0" />
+                    <span className="truncate">
+                      {clipUploading ? 'Uploading...' : videoSrc ? 'Replace Clip' : 'Upload Clip'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="video/mp4,video/webm"
+                      onChange={handleClipUpload}
+                      disabled={clipUploading}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => onPreview(scene.id - 1)}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F4EEE2] text-[#6B6256] hover:text-[#181614] text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Preview in Canvas</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setVideoSrc('')}
+                    disabled={!videoSrc}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-red-50 text-[#6B6256] hover:text-red-600 text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:hover:bg-white disabled:hover:text-[#6B6256]"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Remove clip</span>
+                  </button>
+                </div>
+              </div>
+
+              {uploadError && <p className="text-[11px] font-semibold text-red-700">{uploadError}</p>}
+              {clipError && <p className="text-[11px] font-semibold text-red-700">{clipError}</p>}
+
+              {/* The pickers and the fit choice run the full width, so nothing sits in a narrow column */}
+              <select
+                value={imageSrc}
+                onChange={(e) => setImageSrc(e.target.value)}
+                className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+              >
+                <option value="">Custom Uploaded Image</option>
+                {PRESET_ARTWORKS.map((preset) => (
+                  <option key={preset.path} value={preset.path}>
+                    Preset: {preset.label}
+                  </option>
+                ))}
+              </select>
+
+              {clipLibrary.length > 0 && (
+                <select
+                  value={videoSrc}
+                  onChange={(e) => setVideoSrc(e.target.value)}
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+                >
+                  <option value="">No clip — show the photo above</option>
+                  {clipLibrary.map((clip) => (
+                    <option key={clip.url} value={clip.url}>
+                      {`${clip.label} (${
+                        clip.bytes >= 1048576 ? `${(clip.bytes / 1048576).toFixed(1)} MB` : `${Math.round(clip.bytes / 1024)} KB`
+                      })`}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {videoSrc && !clipError && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-[#6B6256]">
+                    The clip plays instead of the photo, and is silent. If it is shorter than this scene:
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: 'slow', label: 'Slow it to fit', hint: 'Plays in slow motion so it lasts the whole line. Nothing repeats.' },
+                      { id: 'loop', label: 'Loop it', hint: 'Starts again from the beginning. You will see the jump back.' },
+                      { id: 'hold', label: 'Hold last frame', hint: 'Plays through, then stays on its final frame.' },
+                    ] as { id: 'slow' | 'loop' | 'hold'; label: string; hint: string }[]).map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        title={option.hint}
+                        onClick={() => setClipFit(option.id)}
+                        className={`px-2 py-2 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                          clipFit === option.id
+                            ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                            : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+    ) : null;
+
   return (
     <div className="fixed inset-0 z-50 bg-[#181614]/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-[#EAE3D4] my-8 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl border border-[#EAE3D4] my-4 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#EAE3D4] pb-4 mb-4">
+        <div className="flex items-center justify-between border-b border-[#EAE3D4] pb-3 mb-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#E8A317] text-[#181614] flex items-center justify-center font-black text-sm shadow-xs">
               {scene.id}
@@ -181,9 +319,6 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   {timeLabel}
                 </span>
               </h3>
-              <p className="text-xs text-[#6B6256]">
-                Configure the spoken voice line, camera direction, and visual artwork for this beat.
-              </p>
             </div>
           </div>
           <button
@@ -197,8 +332,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
         {/* Content Form: what is said and shot on the left, how it is timed and dressed on the
             right, so the whole scene fits one screen instead of a long scroll. */}
-        <div className="grid md:grid-cols-2 gap-x-6 gap-y-4 items-start">
-          <div className="space-y-4">
+        <div className="grid md:grid-cols-2 gap-x-6 gap-y-3 items-start">
+          <div className="space-y-3">
           {/* 0. Scene style */}
           <div>
             <label className="block text-xs font-bold text-[#181614] mb-1.5">Scene style</label>
@@ -227,59 +362,6 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
             </div>
           </div>
 
-          {sceneType === 'text' && (
-            <div className="bg-[#FBF8F1] p-3.5 rounded-2xl border border-[#E8A317]/40 space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-[#181614] mb-1">Small label (optional)</label>
-                <input
-                  value={eyebrow}
-                  onChange={(e) => setEyebrow(e.target.value)}
-                  maxLength={40}
-                  placeholder="e.g. WHAT HAPPENED NEXT"
-                  className="w-full p-2.5 text-xs bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-[#181614] mb-1">Headline</label>
-                <textarea
-                  value={headline}
-                  onChange={(e) => setHeadline(e.target.value)}
-                  rows={3}
-                  placeholder="Type your headline here"
-                  className="w-full p-3 text-sm bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614] font-semibold"
-                />
-                <p className="text-[11px] text-[#6B6256] mt-1.5 leading-relaxed">
-                  One row per line; each row flies in after the one before. Put a word in{' '}
-                  <span className="font-mono font-semibold text-[#181614]">*stars*</span> to make it gold, e.g.
-                </p>
-                <div className="mt-1.5 rounded-lg bg-white border border-[#EAE3D4] px-3 py-2 text-xs font-semibold text-[#181614] leading-snug font-mono">
-                  <div>Three hundred thousand naira.</div>
-                  <div>
-                    <span className="text-[#C6860C]">*Gone*</span> in one Saturday.
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-[#181614] mb-1">Background</label>
-                <div className="flex gap-2">
-                  {(['cream', 'photo'] as const).map((bg) => (
-                    <button
-                      key={bg}
-                      type="button"
-                      onClick={() => setTextBackground(bg)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                        textBackground === bg
-                          ? 'bg-[#181614] border-[#181614] text-white'
-                          : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614]'
-                      }`}
-                    >
-                      {bg === 'cream' ? 'Plain cream' : 'Over my photo'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 1. Voiceover Narration */}
           <div>
@@ -313,7 +395,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-[#6B6256] leading-relaxed">
-              Describes the camera angle, actor reaction, mood, and on-screen graphic action.
+              Camera angle, actor reaction, mood, on-screen action.
             </p>
             <textarea
               value={visualPrompt}
@@ -326,7 +408,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
           {/* Scene length */}
           <div>
             <label className="block text-xs font-bold text-[#181614] mb-1.5">How long this scene holds</label>
@@ -356,153 +438,71 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               </div>
             </div>
             <p className="text-[11px] text-[#6B6256] mt-1.5">
-              Automatic shares the voiceover out by how much is spoken in each scene, which is a guess:
-              a line said with pauses takes longer than its length suggests. Set the seconds yourself when
-              a scene has to match what you hear. The other automatic scenes take up the rest.
+              Automatic splits the voiceover by how much is spoken in each scene. Set the seconds when a
+              scene must match what you hear — the automatic ones share the rest.
             </p>
           </div>
 
-          {/* 3. Artwork & Image Selection */}
-          {(sceneType === 'photo' || sceneType === 'end_card' || (sceneType === 'text' && textBackground === 'photo')) && (
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-[#181614]">
-              Scene Artwork / Background Image
-            </label>
+          {artworkSection}
 
-            {/* What this scene shows, with the ways to change it beside it */}
-            <div className="flex items-start gap-3">
-              <div className="w-16 h-20 rounded-xl overflow-hidden border border-[#E8A317] shrink-0 bg-[#F4EEE2] shadow-2xs">
-                {imageSrc ? (
-                  <img
-                    src={imageSrc}
-                    alt="Scene preview"
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#6B6256]">
-                    <ImageIcon className="w-6 h-6" />
-                  </div>
-                )}
+          {/* The fly-in text fields live in this column: in the left one they made the editor
+              twice as tall as the right side, which was sitting empty. */}
+          {sceneType === 'text' && (
+            <div className="bg-[#FBF8F1] p-3.5 rounded-2xl border border-[#E8A317]/40 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-[#181614] mb-1">Small label (optional)</label>
+                <input
+                  value={eyebrow}
+                  onChange={(e) => setEyebrow(e.target.value)}
+                  maxLength={40}
+                  placeholder="e.g. WHAT HAPPENED NEXT"
+                  className="w-full p-2.5 text-xs bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614]"
+                />
               </div>
-
-              <div className="grid grid-cols-2 gap-2 flex-1 min-w-0">
-                <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4] text-center">
-                  <Upload className="w-3.5 h-3.5 text-[#E8A317] shrink-0" />
-                  <span className="truncate">{uploading ? 'Uploading...' : 'Upload Photo'}</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleFileUpload}
-                    disabled={uploading}
-                    className="hidden"
-                  />
-                </label>
-
-                <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4] text-center">
-                  <Video className="w-3.5 h-3.5 text-[#E8A317] shrink-0" />
-                  <span className="truncate">
-                    {clipUploading ? 'Uploading...' : videoSrc ? 'Replace Clip' : 'Upload Clip'}
+              <div>
+                <label className="block text-xs font-bold text-[#181614] mb-1">Headline</label>
+                <textarea
+                  value={headline}
+                  onChange={(e) => setHeadline(e.target.value)}
+                  rows={2}
+                  placeholder="Type your headline here"
+                  className="w-full p-3 text-sm bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614] font-semibold"
+                />
+                <p className="text-[11px] text-[#6B6256] mt-1 leading-snug">
+                  One row per line, each flying in after the one before.{' '}
+                  <span className="font-mono font-semibold text-[#181614]">*stars*</span> make a word gold:{' '}
+                  <span className="font-mono text-[#181614]">
+                    <span className="text-[#C6860C]">*Gone*</span> in one Saturday.
                   </span>
-                  <input
-                    type="file"
-                    accept="video/mp4,video/webm"
-                    onChange={handleClipUpload}
-                    disabled={clipUploading}
-                    className="hidden"
-                  />
-                </label>
-
-                <button
-                  type="button"
-                  onClick={() => onPreview(scene.id - 1)}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F4EEE2] text-[#6B6256] hover:text-[#181614] text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Preview in Canvas</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setVideoSrc('')}
-                  disabled={!videoSrc}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-red-50 text-[#6B6256] hover:text-red-600 text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:hover:bg-white disabled:hover:text-[#6B6256]"
-                >
-                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Remove clip</span>
-                </button>
-              </div>
-            </div>
-
-            {uploadError && <p className="text-[11px] font-semibold text-red-700">{uploadError}</p>}
-            {clipError && <p className="text-[11px] font-semibold text-red-700">{clipError}</p>}
-
-            {/* The pickers and the fit choice run the full width, so nothing sits in a narrow column */}
-            <select
-              value={imageSrc}
-              onChange={(e) => setImageSrc(e.target.value)}
-              className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
-            >
-              <option value="">Custom Uploaded Image</option>
-              {PRESET_ARTWORKS.map((preset) => (
-                <option key={preset.path} value={preset.path}>
-                  Preset: {preset.label}
-                </option>
-              ))}
-            </select>
-
-            {clipLibrary.length > 0 && (
-              <select
-                value={videoSrc}
-                onChange={(e) => setVideoSrc(e.target.value)}
-                className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
-              >
-                <option value="">No clip — show the photo above</option>
-                {clipLibrary.map((clip) => (
-                  <option key={clip.url} value={clip.url}>
-                    {`${clip.label} (${
-                      clip.bytes >= 1048576 ? `${(clip.bytes / 1048576).toFixed(1)} MB` : `${Math.round(clip.bytes / 1024)} KB`
-                    })`}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            {videoSrc && !clipError && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] text-[#6B6256]">
-                  The clip plays instead of the photo, and is silent. If it is shorter than this scene:
                 </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {([
-                    { id: 'slow', label: 'Slow it to fit', hint: 'Plays in slow motion so it lasts the whole line. Nothing repeats.' },
-                    { id: 'loop', label: 'Loop it', hint: 'Starts again from the beginning. You will see the jump back.' },
-                    { id: 'hold', label: 'Hold last frame', hint: 'Plays through, then stays on its final frame.' },
-                  ] as { id: 'slow' | 'loop' | 'hold'; label: string; hint: string }[]).map((option) => (
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-[#181614] mb-1">Background</label>
+                <div className="flex gap-2">
+                  {(['cream', 'photo'] as const).map((bg) => (
                     <button
-                      key={option.id}
+                      key={bg}
                       type="button"
-                      title={option.hint}
-                      onClick={() => setClipFit(option.id)}
-                      className={`px-2 py-2 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
-                        clipFit === option.id
-                          ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
-                          : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                      onClick={() => setTextBackground(bg)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                        textBackground === bg
+                          ? 'bg-[#181614] border-[#181614] text-white'
+                          : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614]'
                       }`}
                     >
-                      {option.label}
+                      {bg === 'cream' ? 'Plain cream' : 'Over my photo'}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
           )}
+
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between border-t border-[#EAE3D4] pt-4 mt-5">
+        <div className="flex items-center justify-between border-t border-[#EAE3D4] pt-3 mt-4">
           <button
             type="button"
             onClick={onClose}
