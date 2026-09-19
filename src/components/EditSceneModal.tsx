@@ -364,11 +364,13 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
           {/* 3. Artwork & Image Selection */}
           {(sceneType === 'photo' || sceneType === 'end_card' || (sceneType === 'text' && textBackground === 'photo')) && (
-          <div>
-            <label className="block text-xs font-bold text-[#181614] mb-1.5">
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-[#181614]">
               Scene Artwork / Background Image
             </label>
-            <div className="flex items-center gap-3">
+
+            {/* What this scene shows, with the ways to change it beside it */}
+            <div className="flex items-start gap-3">
               <div className="w-16 h-20 rounded-xl overflow-hidden border border-[#E8A317] shrink-0 bg-[#F4EEE2] shadow-2xs">
                 {imageSrc ? (
                   <img
@@ -384,119 +386,116 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 )}
               </div>
 
-              <div className="flex-1 min-w-0 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4]">
-                    <Upload className="w-3.5 h-3.5 text-[#E8A317]" />
-                    <span>{uploading ? 'Uploading...' : 'Upload Custom Photo'}</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      onChange={handleFileUpload}
-                      disabled={uploading}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => onPreview(scene.id - 1)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-[#F4EEE2] text-[#6B6256] hover:text-[#181614] text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Preview in Canvas</span>
-                  </button>
-                </div>
+              <div className="grid grid-cols-2 gap-2 flex-1 min-w-0">
+                <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4] text-center">
+                  <Upload className="w-3.5 h-3.5 text-[#E8A317] shrink-0" />
+                  <span className="truncate">{uploading ? 'Uploading...' : 'Upload Photo'}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </label>
 
-                {uploadError && <p className="text-[11px] font-semibold text-red-700">{uploadError}</p>}
+                <label className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4] text-center">
+                  <Video className="w-3.5 h-3.5 text-[#E8A317] shrink-0" />
+                  <span className="truncate">
+                    {clipUploading ? 'Uploading...' : videoSrc ? 'Replace Clip' : 'Upload Clip'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm"
+                    onChange={handleClipUpload}
+                    disabled={clipUploading}
+                    className="hidden"
+                  />
+                </label>
 
-                {/* A clip plays in place of the photo. The photo stays as the fallback while it loads. */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold rounded-xl cursor-pointer transition-colors border border-[#EAE3D4]">
-                    <Video className="w-3.5 h-3.5 text-[#E8A317]" />
-                    <span>{clipUploading ? 'Uploading clip...' : videoSrc ? 'Replace Video Clip' : 'Upload Video Clip'}</span>
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm"
-                      onChange={handleClipUpload}
-                      disabled={clipUploading}
-                      className="hidden"
-                    />
-                  </label>
-                  {videoSrc && (
-                    <button
-                      type="button"
-                      onClick={() => setVideoSrc('')}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-red-50 text-[#6B6256] hover:text-red-600 text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Remove clip</span>
-                    </button>
-                  )}
-                </div>
-
-                {clipLibrary.length > 0 && (
-                  <select
-                    value={videoSrc}
-                    onChange={(e) => setVideoSrc(e.target.value)}
-                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
-                  >
-                    <option value="">No clip — show the photo above</option>
-                    {clipLibrary.map((clip) => (
-                      <option key={clip.url} value={clip.url}>
-                        {`${clip.label} (${
-                          clip.bytes >= 1048576 ? `${(clip.bytes / 1048576).toFixed(1)} MB` : `${Math.round(clip.bytes / 1024)} KB`
-                        })`}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {videoSrc && !clipError && (
-                  <div className="space-y-1.5">
-                    <p className="text-[11px] text-[#6B6256]">
-                      This clip plays instead of the photo above, and is silent — the voiceover is the only
-                      sound. If it is shorter than this scene ({timeLabel}):
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {([
-                        { id: 'slow', label: 'Slow it to fit', hint: 'Plays in slow motion so it lasts the whole line. Nothing repeats.' },
-                        { id: 'loop', label: 'Loop it', hint: 'Starts again from the beginning. You will see the jump back.' },
-                        { id: 'hold', label: 'Hold last frame', hint: 'Plays through, then stays on its final frame.' },
-                      ] as { id: 'slow' | 'loop' | 'hold'; label: string; hint: string }[]).map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          title={option.hint}
-                          onClick={() => setClipFit(option.id)}
-                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
-                            clipFit === option.id
-                              ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
-                              : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {clipError && <p className="text-[11px] font-semibold text-red-700">{clipError}</p>}
-
-                {/* Preset Picker */}
-                <select
-                  value={imageSrc}
-                  onChange={(e) => setImageSrc(e.target.value)}
-                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+                <button
+                  type="button"
+                  onClick={() => onPreview(scene.id - 1)}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F4EEE2] text-[#6B6256] hover:text-[#181614] text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer"
                 >
-                  <option value="">Custom Uploaded Image</option>
-                  {PRESET_ARTWORKS.map((preset) => (
-                    <option key={preset.path} value={preset.path}>
-                      Preset: {preset.label}
-                    </option>
-                  ))}
-                </select>
+                  <Eye className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Preview in Canvas</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVideoSrc('')}
+                  disabled={!videoSrc}
+                  className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-red-50 text-[#6B6256] hover:text-red-600 text-xs font-semibold rounded-xl border border-[#EAE3D4] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:hover:bg-white disabled:hover:text-[#6B6256]"
+                >
+                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Remove clip</span>
+                </button>
               </div>
             </div>
+
+            {uploadError && <p className="text-[11px] font-semibold text-red-700">{uploadError}</p>}
+            {clipError && <p className="text-[11px] font-semibold text-red-700">{clipError}</p>}
+
+            {/* The pickers and the fit choice run the full width, so nothing sits in a narrow column */}
+            <select
+              value={imageSrc}
+              onChange={(e) => setImageSrc(e.target.value)}
+              className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+            >
+              <option value="">Custom Uploaded Image</option>
+              {PRESET_ARTWORKS.map((preset) => (
+                <option key={preset.path} value={preset.path}>
+                  Preset: {preset.label}
+                </option>
+              ))}
+            </select>
+
+            {clipLibrary.length > 0 && (
+              <select
+                value={videoSrc}
+                onChange={(e) => setVideoSrc(e.target.value)}
+                className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+              >
+                <option value="">No clip — show the photo above</option>
+                {clipLibrary.map((clip) => (
+                  <option key={clip.url} value={clip.url}>
+                    {`${clip.label} (${
+                      clip.bytes >= 1048576 ? `${(clip.bytes / 1048576).toFixed(1)} MB` : `${Math.round(clip.bytes / 1024)} KB`
+                    })`}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {videoSrc && !clipError && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-[#6B6256]">
+                  The clip plays instead of the photo, and is silent. If it is shorter than this scene:
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { id: 'slow', label: 'Slow it to fit', hint: 'Plays in slow motion so it lasts the whole line. Nothing repeats.' },
+                    { id: 'loop', label: 'Loop it', hint: 'Starts again from the beginning. You will see the jump back.' },
+                    { id: 'hold', label: 'Hold last frame', hint: 'Plays through, then stays on its final frame.' },
+                  ] as { id: 'slow' | 'loop' | 'hold'; label: string; hint: string }[]).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      title={option.hint}
+                      onClick={() => setClipFit(option.id)}
+                      className={`px-2 py-2 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                        clipFit === option.id
+                          ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                          : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           )}
           </div>
