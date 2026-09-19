@@ -72,8 +72,15 @@ export interface CommercialPreset {
   description: string;
 }
 
+export type OverlayPosition =
+  | 'top-left' | 'top-center' | 'top-right'
+  | 'middle-left' | 'middle-center' | 'middle-right'
+  | 'bottom-left' | 'bottom-center' | 'bottom-right';
+
 export interface SceneOverlay {
   kind: 'debit_alert';
+  /** Where the card sits in the frame. Default: middle-center. */
+  position?: OverlayPosition;
   /** The small badge at the top, e.g. "BANK DEBIT ALERT". */
   title?: string;
   /** The big line, e.g. "₦300,000.00". */

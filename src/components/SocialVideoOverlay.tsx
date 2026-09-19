@@ -1151,8 +1151,13 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           const ease = 1 - Math.pow(1 - appear, 3);
           const cardW = 780;
           const cardH = 360;
-          const cardX = (W - cardW) / 2;
-          const cardY = 320 + (1 - ease) * 60;
+          const [vertical, horizontal] = (o.position ?? 'middle-center').split('-');
+          const margin = 60;
+          const cardX =
+            horizontal === 'left' ? margin : horizontal === 'right' ? W - cardW - margin : (W - cardW) / 2;
+          // The bottom row stops above the captions rather than sitting behind them.
+          const restY = vertical === 'top' ? 170 : vertical === 'bottom' ? H - cardH - 290 : 320;
+          const cardY = restY + (1 - ease) * 60;
 
           ctx.save();
           ctx.globalAlpha = ease;

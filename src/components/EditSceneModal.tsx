@@ -13,7 +13,7 @@ import {
   Clock,
   Eye,
 } from 'lucide-react';
-import { AdvertScene, SceneOverlay } from '../types';
+import { AdvertScene, SceneOverlay, OverlayPosition } from '../types';
 
 interface EditSceneModalProps {
   isOpen: boolean;
@@ -407,7 +407,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
             </div>
 
             {overlay?.kind === 'debit_alert' && (
-              <div className="mt-2 space-y-2 bg-[#FBF8F1] p-3 rounded-2xl border border-[#E8A317]/40">
+              <div className="mt-2 space-y-1.5 bg-[#FBF8F1] p-2.5 rounded-2xl border border-[#E8A317]/40">
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     value={overlay.title ?? ''}
@@ -440,7 +440,37 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
                   />
                 </div>
-                <p className="text-[11px] text-[#6B6256]">Slides up over the picture as the scene starts.</p>
+                {/* Where it sits, as a 3x3 of the frame */}
+                <div className="flex items-center gap-3">
+                  <div className="grid grid-cols-3 gap-1">
+                    {(['top-left', 'top-center', 'top-right',
+                       'middle-left', 'middle-center', 'middle-right',
+                       'bottom-left', 'bottom-center', 'bottom-right'] as OverlayPosition[]).map((pos) => {
+                      const active = (overlay.position ?? 'middle-center') === pos;
+                      return (
+                        <button
+                          key={pos}
+                          type="button"
+                          title={pos.replace('-', ' ')}
+                          aria-label={pos.replace('-', ' ')}
+                          onClick={() => setOverlay({ ...overlay, position: pos })}
+                          className={`w-6 h-5 rounded-md border transition-colors cursor-pointer ${
+                            active ? 'bg-[#E8A317] border-[#E8A317]' : 'bg-white border-[#EAE3D4] hover:bg-[#F4EEE2]'
+                          }`}
+                        >
+                          <span className={`block w-1.5 h-1.5 rounded-full mx-auto ${active ? 'bg-[#181614]' : 'bg-[#DACFBE]'}`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-[#6B6256] flex-1">
+                    Where the card sits in the frame — currently{' '}
+                    <span className="font-semibold text-[#181614]">
+                      {(overlay.position ?? 'middle-center').replace('-', ' ')}
+                    </span>
+                    . It slides up as the scene starts.
+                  </p>
+                </div>
               </div>
             )}
           </div>
