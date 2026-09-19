@@ -43,9 +43,10 @@ import {
   saveCommercial,
   deleteCommercial,
 } from './lib/commercialsDb';
-import { FolderOpen, Save, ArrowLeft, LogOut } from 'lucide-react';
+import { FolderOpen, Save, ArrowLeft, LogOut, HardDrive } from 'lucide-react';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { NewCommercialModal } from './components/NewCommercialModal';
+import { MediaLibraryView } from './components/MediaLibraryView';
 
 export default function App() {
   const [script, setScript] = useState(DEFAULT_SCRIPT);
@@ -290,7 +291,7 @@ export default function App() {
   // Two levels: the list of saved ads (home), and inside one ad, three steps in the order the
   // work actually happens.
   type AppPage = 'script' | 'storyboard' | 'video';
-  const [view, setView] = useState<'home' | 'ad'>('home');
+  const [view, setView] = useState<'home' | 'ad' | 'media'>('home');
   const [activePage, setActivePage] = useState<AppPage>('script');
   const [confirmLeave, setConfirmLeave] = useState(false);
 
@@ -448,6 +449,26 @@ export default function App() {
             {view === 'home' && (
               <button
                 type="button"
+                onClick={() => setView('media')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2] transition-all font-semibold text-xs cursor-pointer"
+              >
+                <HardDrive className="w-4 h-4" />
+                <span>Media</span>
+              </button>
+            )}
+            {view === 'media' && (
+              <button
+                type="button"
+                onClick={() => setView('home')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2] transition-all font-semibold text-xs cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>All ads</span>
+              </button>
+            )}
+            {view === 'home' && (
+              <button
+                type="button"
                 id="header-new-ad-btn"
                 onClick={handleNewCommercial}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] transition-all font-bold text-xs cursor-pointer shadow-xs"
@@ -587,6 +608,12 @@ export default function App() {
               onDeleteCommercial={handleDeleteSavedCommercial}
               onNewCommercial={handleNewCommercial}
             />
+          </div>
+        )}
+
+        {view === 'media' && (
+          <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
+            <MediaLibraryView />
           </div>
         )}
 

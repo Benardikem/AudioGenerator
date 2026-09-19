@@ -9,6 +9,7 @@ import { createServer as createViteServer } from "vite";
 import { installAuth } from "./auth";
 import { installCommercialsApi } from "./commercialsStore";
 import { installSceneVideosApi } from "./sceneVideos";
+import { installMediaApi } from "./mediaApi";
 
 /** Keep in step with MAX_SCENES in src/utils/sceneTimeline.ts. */
 const MAX_SCENES = 24;
@@ -30,6 +31,9 @@ installCommercialsApi(app);
 
 // DO NOT REMOVE. Scene video clips (files on disk). Must stay after installAuth. See GEMINI.md.
 installSceneVideosApi(app);
+
+// The Media screen: lists photos and clips with the adverts using them, and deletes unused ones.
+installMediaApi(app);
 
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {

@@ -51,9 +51,18 @@ interface Row {
 /** undefined = leave the stored audio as it is; null = remove it. */
 type AudioChange = Audio | null | undefined;
 
+interface StoredImage {
+  id: string;
+  mime: string;
+  bytes: number;
+  createdAt: Date;
+}
+
 interface Store {
   putImage(image: Audio): Promise<string>;
   getImage(id: string): Promise<Audio | null>;
+  listImages(): Promise<StoredImage[]>;
+  removeImage(id: string): Promise<void>;
   list(): Promise<Row[]>;
   get(id: string): Promise<Row | null>;
   upsert(id: string, record: RecordBody, audio: AudioChange, createdAt: Date): Promise<Row>;
@@ -65,8 +74,53 @@ const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
+/** Set when the routes are installed, so the media screen can read and tidy the same store. */
+let activeStore: Store | null = null;
+
+export interface MediaUse {
+  /** The media URL a saved advert points at. */
+  url: string;
+  /** The adverts using it, by title. */
+  titles: string[];
+}
+
+/**
+ * Which saved adverts use which photo or clip. The media screen needs this to say what a file is
+ * for, and to refuse to delete something an advert still depends on.
+ */
+export async function mediaUsage(): Promise<MediaUse[]> {
+  if (!activeStore) return [];
+  const uses = new Map<string, Set<string>>();
+  for (const row of await activeStore.list()) {
+    let scenes: any[] = [];
+    try {
+      scenes = row.record.scenes ? JSON.parse(row.record.scenes) : [];
+    } catch {
+      continue; // unreadable scenes shouldn't make a file look unused and get deleted
+    }
+    if (!Array.isArray(scenes)) continue;
+    for (const scene of scenes) {
+      for (const url of [scene?.imageSrc, scene?.videoSrc]) {
+        if (typeof url !== "string" || !url.startsWith("/api/")) continue;
+        if (!uses.has(url)) uses.set(url, new Set());
+        uses.get(url)!.add(row.title);
+      }
+    }
+  }
+  return [...uses].map(([url, titles]) => ({ url, titles: [...titles] }));
+}
+
+export async function listStoredImages(): Promise<StoredImage[]> {
+  return activeStore ? activeStore.listImages() : [];
+}
+
+export async function removeStoredImage(id: string): Promise<void> {
+  if (activeStore) await activeStore.removeImage(id);
+}
+
 export function installCommercialsApi(app: Express) {
   const store = createStore();
+  activeStore = store;
 
   // Scene photos. Stored on their own and referenced by URL: embedded as data URLs they made the
   // saved scenes JSON megabytes long, and a single phone photo was enough to make Save fail.
@@ -297,6 +351,18 @@ function postgresStore(connectionString: string): Store {
       const { rows } = await pool.query("SELECT mime, bytes FROM scene_images WHERE id = $1", [id]);
       return rows[0] ? { mime: rows[0].mime, bytes: rows[0].bytes } : null;
     },
+    async listImages() {
+      await initImages();
+      // octet_length, not the bytes themselves: the media screen needs sizes, not the photos.
+      const { rows } = await pool.query(
+        "SELECT id, mime, octet_length(bytes) AS bytes, created_at FROM scene_images ORDER BY created_at DESC"
+      );
+      return rows.map((r: any) => ({ id: r.id, mime: r.mime, bytes: Number(r.bytes), createdAt: r.created_at }));
+    },
+    async removeImage(id) {
+      await initImages();
+      await pool.query("DELETE FROM scene_images WHERE id = $1", [id]);
+    },
     async list() {
       await init();
       const { rows } = await pool.query(`SELECT ${COLUMNS} FROM commercials ORDER BY updated_at DESC`);
@@ -352,6 +418,17 @@ function memoryStore(): Store {
     },
     async getImage(id) {
       return images.get(id) ?? null;
+    },
+    async listImages() {
+      return [...images].map(([id, image]) => ({
+        id,
+        mime: image.mime,
+        bytes: image.bytes.length,
+        createdAt: new Date(),
+      }));
+    },
+    async removeImage(id) {
+      images.delete(id);
     },
     async list() {
       return [...rows.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).map(strip);

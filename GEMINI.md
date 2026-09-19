@@ -68,6 +68,10 @@ in production the server refuses to start without it.
   three days. The files are mirrored to Backblaze separately.
 - In `server.ts`, keep `import { installSceneVideosApi } from "./sceneVideos";` and the call
   `installSceneVideosApi(app)` after `installAuth(app);`.
+- **`mediaApi.ts`** is the Media screen (`src/components/MediaLibraryView.tsx`, reached from the
+  header on the saved-ads page). It lists every uploaded photo and clip with the adverts using
+  each one, and deletes the unused. Deleting a file a saved advert still points at is refused by
+  the server, not just hidden in the UI — keep it that way, so tidying up can never break an advert.
 - Clips are always muted and looped to fill their scene, and get no slow zoom — the footage already
   moves. The voiceover is the only sound in an advert.
 

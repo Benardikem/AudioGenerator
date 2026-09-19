@@ -48,11 +48,54 @@ function sniff(bytes: Buffer): "mp4" | "webm" | null {
   return null;
 }
 
+/** Set when the routes are installed, so the media screen can list and delete clips too. */
+let mediaDir = "";
+
+export interface StoredClip {
+  url: string;
+  label: string;
+  bytes: number;
+  uploadedAt: string;
+}
+
+export function listClips(): StoredClip[] {
+  if (!mediaDir) return [];
+  let names: string[];
+  try {
+    names = fs.readdirSync(mediaDir).filter((f) => NAME.test(f));
+  } catch {
+    return [];
+  }
+  return names
+    .map((name) => {
+      const stat = fs.statSync(path.join(mediaDir, name));
+      return {
+        url: `/api/scene-videos/${name}`,
+        label: labelOf(name),
+        bytes: stat.size,
+        uploadedAt: stat.mtime.toISOString(),
+      };
+    })
+    .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+}
+
+/** Deletes one clip. Whether anything still uses it is decided by the caller. */
+export function removeClip(name: string): boolean {
+  if (!mediaDir || !NAME.test(name)) return false;
+  try {
+    fs.unlinkSync(path.join(mediaDir, name));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function installSceneVideosApi(app: Express) {
   const dir =
     process.env.MEDIA_DIR ||
     (process.env.NODE_ENV === "production" ? "/data/media" : path.join(os.tmpdir(), "legitafrica-studio-media"));
   fs.mkdirSync(dir, { recursive: true });
+  mediaDir = dir;
   console.log(`[clips] scene videos stored in ${dir}`);
 
   app.post(
@@ -90,20 +133,7 @@ export function installSceneVideosApi(app: Express) {
 
   // Every clip uploaded so far, so a scene can go back to one instead of uploading it again.
   app.get("/api/scene-videos", (_req: Request, res: Response) => {
-    let names: string[];
-    try {
-      names = fs.readdirSync(dir).filter((f) => NAME.test(f));
-    } catch {
-      return res.json({ clips: [] });
-    }
-    const clips = names
-      .map((name) => {
-        const stat = fs.statSync(path.join(dir, name));
-        return { url: `/api/scene-videos/${name}`, label: labelOf(name), bytes: stat.size, uploadedAt: stat.mtime.toISOString() };
-      })
-      .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
-      .slice(0, 200);
-    res.json({ clips });
+    res.json({ clips: listClips().slice(0, 200) });
   });
 
   app.get("/api/scene-videos/:name", (req: Request, res: Response) => {
