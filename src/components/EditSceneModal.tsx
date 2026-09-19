@@ -167,7 +167,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-[#181614]/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-[#EAE3D4] my-8 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl border border-[#EAE3D4] my-8 animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#EAE3D4] pb-4 mb-4">
           <div className="flex items-center gap-3">
@@ -195,8 +195,10 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           </button>
         </div>
 
-        {/* Content Form */}
-        <div className="space-y-4">
+        {/* Content Form: what is said and shot on the left, how it is timed and dressed on the
+            right, so the whole scene fits one screen instead of a long scroll. */}
+        <div className="grid md:grid-cols-2 gap-x-6 gap-y-4 items-start">
+          <div className="space-y-4">
           {/* 0. Scene style */}
           <div>
             <label className="block text-xs font-bold text-[#181614] mb-1.5">Scene style</label>
@@ -322,6 +324,9 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
             />
           </div>
 
+          </div>
+
+          <div className="space-y-4">
           {/* Scene length */}
           <div>
             <label className="block text-xs font-bold text-[#181614] mb-1.5">How long this scene holds</label>
@@ -494,6 +499,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
             </div>
           </div>
           )}
+          </div>
         </div>
 
         {/* Footer Actions */}
