@@ -1138,6 +1138,85 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
+      // SCENE OVERLAY CARD: a bank alert laid over the picture, in this advert's own words.
+      // Slides up and fades in just after the scene starts, then stays put.
+      // ----------------------------------------------------
+      if (activeScene?.overlay?.kind === 'debit_alert') {
+        const o = activeScene.overlay;
+        const into = time - span.start;
+        // It slides in while the advert plays. Paused — scrubbing, or judging a still frame — it is
+        // shown in place, so the scene doesn't look empty at its first moment.
+        const appear = isPlayingRef.current ? Math.min(1, Math.max(0, (into - 0.25) / 0.45)) : 1;
+        if (appear > 0) {
+          const ease = 1 - Math.pow(1 - appear, 3);
+          const cardW = 780;
+          const cardH = 360;
+          const cardX = (W - cardW) / 2;
+          const cardY = 320 + (1 - ease) * 60;
+
+          ctx.save();
+          ctx.globalAlpha = ease;
+
+          // Darken the picture behind it, so the card reads whatever the footage is doing
+          const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);
+          vig.addColorStop(0, 'rgba(24, 22, 20, 0.15)');
+          vig.addColorStop(1, 'rgba(24, 22, 20, 0.7)');
+          ctx.fillStyle = vig;
+          ctx.fillRect(0, 0, W, H);
+
+          ctx.save();
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+          ctx.shadowBlur = 40;
+          ctx.shadowOffsetY = 20;
+          ctx.fillStyle = BRAND_COLORS.cream;
+          ctx.beginPath();
+          ctx.roundRect(cardX, cardY, cardW, cardH, 32);
+          ctx.fill();
+          ctx.strokeStyle = BRAND_COLORS.borders;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          ctx.restore();
+
+          const title = (o.title || 'BANK DEBIT ALERT').toUpperCase();
+          ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          const badgeW = Math.min(cardW - 160, ctx.measureText(title).width + 40);
+          ctx.fillStyle = BRAND_COLORS.sand;
+          ctx.beginPath();
+          ctx.roundRect(cardX + 40, cardY + 40, badgeW, 52, 16);
+          ctx.fill();
+          ctx.fillStyle = BRAND_COLORS.nearBlack;
+          ctx.textAlign = 'left';
+          ctx.fillText(title, cardX + 60, cardY + 74);
+
+          // The amount, shrunk to fit rather than run off the card
+          const amount = o.amount || '₦0.00';
+          let amountSize = 68;
+          ctx.font = `900 ${amountSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+          while (ctx.measureText(amount).width > cardW - 80 && amountSize > 34) {
+            amountSize -= 4;
+            ctx.font = `900 ${amountSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+          }
+          ctx.fillStyle = BRAND_COLORS.nearBlack;
+          ctx.fillText(amount, cardX + 40, cardY + 180);
+
+          ctx.fillStyle = BRAND_COLORS.warmGrey;
+          ctx.font = '500 28px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          if (o.line1) ctx.fillText(o.line1, cardX + 40, cardY + 235);
+          if (o.line2) ctx.fillText(o.line2, cardX + 40, cardY + 280);
+
+          ctx.fillStyle = BRAND_COLORS.gold;
+          ctx.beginPath();
+          ctx.arc(cardX + cardW - 70, cardY + 70, 24, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = BRAND_COLORS.cream;
+          ctx.font = 'bold 26px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('✓', cardX + cardW - 70, cardY + 78);
+          ctx.restore();
+        }
+      }
+
+      // ----------------------------------------------------
       // BURNED-IN SPOKEN CAPTIONS (Near the bottom, strictly adhering to brand colors)
       // ----------------------------------------------------
       if (subtitlesEnabled && currentCue) {

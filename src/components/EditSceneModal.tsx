@@ -13,7 +13,7 @@ import {
   Clock,
   Eye,
 } from 'lucide-react';
-import { AdvertScene } from '../types';
+import { AdvertScene, SceneOverlay } from '../types';
 
 interface EditSceneModalProps {
   isOpen: boolean;
@@ -60,6 +60,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [clipLibrary, setClipLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
   const [clipFit, setClipFit] = useState<'slow' | 'loop' | 'hold'>('slow');
   const [lengthSeconds, setLengthSeconds] = useState('');
+  const [overlay, setOverlay] = useState<SceneOverlay | null>(null);
 
   useEffect(() => {
     if (scene) {
@@ -73,6 +74,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setVideoSrc(scene.videoSrc || '');
       setClipFit(scene.clipFit || 'slow');
       setLengthSeconds(scene.lengthSeconds ? String(scene.lengthSeconds) : '');
+      setOverlay(scene.overlay ?? null);
       setClipError(null);
     }
   }, [scene]);
@@ -159,6 +161,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       videoSrc: videoSrc.trim() || undefined,
       ...(videoSrc.trim() ? { clipFit } : {}),
       lengthSeconds: Number(lengthSeconds) > 0 ? Number(lengthSeconds) : undefined,
+      overlay: overlay ?? undefined,
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -362,6 +365,85 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
             </div>
           </div>
 
+
+          {/* Overlay card: shown over the photo or clip, in this advert's own words */}
+          <div>
+            <label className="block text-xs font-bold text-[#181614] mb-1.5">Overlay on the picture</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setOverlay(null)}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                  !overlay
+                    ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                    : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                }`}
+              >
+                None
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setOverlay(
+                    overlay?.kind === 'debit_alert'
+                      ? overlay
+                      : {
+                          kind: 'debit_alert',
+                          title: 'BANK DEBIT ALERT',
+                          amount: '₦300,000.00',
+                          line1: 'Txn: Instant transfer to agent',
+                          line2: 'Status: Successful',
+                        }
+                  )
+                }
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                  overlay?.kind === 'debit_alert'
+                    ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                    : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                }`}
+              >
+                Debit alert
+              </button>
+            </div>
+
+            {overlay?.kind === 'debit_alert' && (
+              <div className="mt-2 space-y-2 bg-[#FBF8F1] p-3 rounded-2xl border border-[#E8A317]/40">
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={overlay.title ?? ''}
+                    onChange={(e) => setOverlay({ ...overlay, title: e.target.value })}
+                    maxLength={28}
+                    placeholder="BANK DEBIT ALERT"
+                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                  />
+                  <input
+                    value={overlay.amount ?? ''}
+                    onChange={(e) => setOverlay({ ...overlay, amount: e.target.value })}
+                    maxLength={20}
+                    placeholder="₦300,000.00"
+                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614] font-bold"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={overlay.line1 ?? ''}
+                    onChange={(e) => setOverlay({ ...overlay, line1: e.target.value })}
+                    maxLength={44}
+                    placeholder="Txn: Instant transfer to agent"
+                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                  />
+                  <input
+                    value={overlay.line2 ?? ''}
+                    onChange={(e) => setOverlay({ ...overlay, line2: e.target.value })}
+                    maxLength={44}
+                    placeholder="Status: Successful"
+                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                  />
+                </div>
+                <p className="text-[11px] text-[#6B6256]">Slides up over the picture as the scene starts.</p>
+              </div>
+            )}
+          </div>
 
           {/* 1. Voiceover Narration */}
           <div>

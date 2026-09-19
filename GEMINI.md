@@ -83,6 +83,9 @@ in production the server refuses to start without it.
   pauses runs far longer — so this override must stay available; the rest of the voiceover is
   shared out between the scenes that have no set length.
 
+- A scene can carry an `overlay` card drawn over its picture — currently `debit_alert`, whose
+  title, amount and two lines are typed by the user in the scene editor. This is how a campaign
+  gets a graphic like a bank alert: as this scene's own words, editable, never hard-coded.
 - Photo scenes draw only the scene's own photo. They used to draw fixed graphics from the first
   campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card, a WhatsApp chat) on top
   of every ad's photos. Do not add campaign-specific graphics back into the scene drawing; put them

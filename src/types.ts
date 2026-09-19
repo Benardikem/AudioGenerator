@@ -72,6 +72,17 @@ export interface CommercialPreset {
   description: string;
 }
 
+export interface SceneOverlay {
+  kind: 'debit_alert';
+  /** The small badge at the top, e.g. "BANK DEBIT ALERT". */
+  title?: string;
+  /** The big line, e.g. "₦300,000.00". */
+  amount?: string;
+  /** Two smaller lines under the amount. */
+  line1?: string;
+  line2?: string;
+}
+
 export interface AdvertScene {
   id: number;
   voiceLine: string;
@@ -88,6 +99,11 @@ export interface AdvertScene {
   videoSrc?: string;
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */
   clipFit?: 'slow' | 'loop' | 'hold';
+  /**
+   * A card laid over the scene's picture — a bank alert, say — to show what the line is talking
+   * about. Every word on it belongs to this advert; nothing is filled in from another campaign.
+   */
+  overlay?: SceneOverlay;
   /**
    * How long this scene holds, in seconds. Unset means it shares the voiceover with the other
    * unset scenes in proportion to how much is spoken in each.
