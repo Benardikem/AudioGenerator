@@ -590,8 +590,12 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
                 />
                 <p className="text-[11px] text-[#6B6256]">
-                  Leave a box empty for the standard wording. Invent the business name — do not name a real
-                  one unless the story is your own.
+                  Leave a box empty for the standard wording.{' '}
+                  <span className="font-semibold text-[#181614]">
+                    If the story is about something going wrong, leave the business name out
+                  </span>{' '}
+                  — a made-up name may belong to a real business, and a bad review against it is defamation.
+                  Name one only for a good review, or when the business is yours.
                 </p>
               </div>
             </div>

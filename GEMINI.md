@@ -86,6 +86,9 @@ in production the server refuses to start without it.
 - The `ui_search` screen's words come from the scene's `screenText` (search box, business found,
   review quote). It used to name a tailor's shop from the first campaign on every advert. The
   `ui_review` screen already takes its headline from the scene's own `voiceLine`.
+- Never put a named business next to a bad review in an advert, in defaults, examples or generated
+  scripts: an invented name may belong to a real business, and the claim is then defamatory. Good
+  reviews may name a business; bad ones must not.
 - A scene can carry an `overlay` card drawn over its picture — currently `debit_alert`, whose
   title, amount and two lines are typed by the user in the scene editor. This is how a campaign
   gets a graphic like a bank alert: as this scene's own words, editable, never hard-coded.
