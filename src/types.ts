@@ -106,6 +106,8 @@ export interface AdvertScene {
   videoSrc?: string;
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */
   clipFit?: 'slow' | 'loop' | 'hold';
+  /** Stars shown on the LegitAfrica search and review screens, 1 to 5. Default: 5. */
+  rating?: number;
   /**
    * Small print at the foot of the end card: "Dramatisation · Names withheld". Settles for the
    * viewer whether the advert is pointing at a real business.

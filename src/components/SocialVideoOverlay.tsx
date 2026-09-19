@@ -1,5 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { sceneTimeline, sceneIndexAt, isBrandType, clipFrameAt, ClipFit } from '../utils/sceneTimeline';
+
+/** The star row for a scene's rating: filled stars up to the rating, hollow ones after it. */
+const starRow = (rating?: number) => {
+  const filled = Math.max(1, Math.min(5, Math.round(rating ?? 5)));
+  return [0, 1, 2, 3, 4].map((i) => (i < filled ? '★' : '☆')).join(' ');
+};
 import {
   Play,
   Pause,
@@ -842,7 +848,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         // 5 Gold Stars (Star gold #F5B301)
         ctx.fillStyle = BRAND_COLORS.starGold;
         ctx.font = '48px sans-serif';
-        ctx.fillText('★ ★ ★ ★ ★', phoneX + 90, resultY + 135);
+        ctx.fillText(starRow(activeScene.rating), phoneX + 90, resultY + 135);
 
         // Tap rating instruction
         ctx.fillStyle = BRAND_COLORS.warmGrey;
@@ -969,7 +975,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         ctx.font = '38px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('★ ★ ★ ★ ★', W / 2, starsY);
+        ctx.fillText(starRow(activeScene.rating), W / 2, starsY);
 
         // [FIXED INTERIOR TEXT & OVERFLOW PREVENTION]:
         // Main Headline Layout: Prominent quote: "No business fit pay us to comot honest review."

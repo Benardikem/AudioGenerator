@@ -89,6 +89,7 @@ in production the server refuses to start without it.
 - The search screen's business name falls back to `*** Properties Ltd` — a mask with nothing to
   decode. Do not replace that default with a realistic-sounding name.
 - An `end_card` scene can show "Dramatisation · Names withheld" (`disclaimer: true`).
+- The stars on the search and review screens come from the scene's `rating` (1-5, default 5).
 - Never put a named business next to a bad review in an advert, in defaults, examples or generated
   scripts: an invented name may belong to a real business, and the claim is then defamatory. Good
   reviews may name a business; bad ones must not.

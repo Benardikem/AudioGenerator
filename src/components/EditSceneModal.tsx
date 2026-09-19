@@ -63,6 +63,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [overlay, setOverlay] = useState<SceneOverlay | null>(null);
   const [screenText, setScreenText] = useState<{ query?: string; business?: string; quote?: string }>({});
   const [disclaimer, setDisclaimer] = useState(false);
+  const [rating, setRating] = useState(5);
 
   useEffect(() => {
     if (scene) {
@@ -79,6 +80,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setOverlay(scene.overlay ?? null);
       setScreenText(scene.screenText ?? {});
       setDisclaimer(!!scene.disclaimer);
+      setRating(scene.rating ?? 5);
       setClipError(null);
     }
   }, [scene]);
@@ -171,6 +173,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           ? screenText
           : undefined,
       disclaimer: sceneType === 'end_card' && disclaimer ? true : undefined,
+      rating: (sceneType === 'ui_search' || sceneType === 'ui_review') && rating !== 5 ? rating : undefined,
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -580,6 +583,39 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 reporting a real case.
               </span>
             </label>
+          )}
+
+          {(sceneType === 'ui_search' || sceneType === 'ui_review') && (
+            <div>
+              <label className="block text-xs font-bold text-[#181614] mb-1.5">Stars shown</label>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setRating(n)}
+                      aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                      title={`${n} star${n === 1 ? '' : 's'}`}
+                      className={`text-lg leading-none transition-colors cursor-pointer ${
+                        n <= rating ? 'text-[#F5B301]' : 'text-[#DACFBE] hover:text-[#C6860C]'
+                      }`}
+                    >
+                      {n <= rating ? '★' : '☆'}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[11px] font-semibold text-[#6B6256]">
+                  {rating} of 5
+                </span>
+              </div>
+              {rating <= 2 && screenText.business && (
+                <p className="text-[11px] font-semibold text-red-700 mt-1.5">
+                  A low rating beside a business name is the combination that can defame a real business.
+                  Clear the name, or raise the rating.
+                </p>
+              )}
+            </div>
           )}
 
           {/* The words on the search screen. Without these every advert showed the same shop. */}
