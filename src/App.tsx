@@ -395,6 +395,19 @@ export default function App() {
     : null;
   const saveStatus: 'new' | 'saved' | 'changed' = !savedAd ? 'new' : currentState === savedState ? 'saved' : 'changed';
 
+  // The in-app guard below only covers leaving by the All ads button. Refreshing the page or
+  // closing the tab threw unsaved work away without a word, which is how a scene edited and
+  // applied but not yet saved could come back as it was before.
+  useEffect(() => {
+    if (view !== 'ad' || saveStatus === 'saved') return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [view, saveStatus]);
+
   const goHome = () => {
     if (saveStatus === 'saved') {
       setView('home');
