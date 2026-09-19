@@ -29,10 +29,13 @@ function safeLabel(raw: unknown) {
   return cleaned.slice(0, 48);
 }
 
-/** The name as the person typed it, read back out of the stored file name. */
+/**
+ * The name as the person typed it, read back out of the stored file name. Clips uploaded before
+ * names were kept fall back to a short piece of their checksum, so they can still be told apart.
+ */
 function labelOf(name: string) {
   const m = /^[a-f0-9]{32}__(.+)\.(mp4|webm)$/.exec(name);
-  return m ? m[1] : "Clip";
+  return m ? m[1] : `Clip ${name.slice(0, 6)}`;
 }
 
 /** Accepted uploads, by what the file actually starts with — not by the name or the stated type. */

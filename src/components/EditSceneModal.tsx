@@ -397,7 +397,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     <option value="">No clip — show the photo above</option>
                     {clipLibrary.map((clip) => (
                       <option key={clip.url} value={clip.url}>
-                        {`Clip: ${clip.label} (${
+                        {`${clip.label} (${
                           clip.bytes >= 1048576 ? `${(clip.bytes / 1048576).toFixed(1)} MB` : `${Math.round(clip.bytes / 1024)} KB`
                         })`}
                       </option>
