@@ -823,9 +823,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         ctx.fillStyle = BRAND_COLORS.nearBlack;
         ctx.font = '600 32px sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('🔍  Search business name...', phoneX + 90, searchY + 56);
+        ctx.fillText(`🔍  ${activeScene.screenText?.query || 'Search business name...'}`, phoneX + 90, searchY + 56);
 
-        // Invented business name search result: "Adeola Stitches"
+        // The business this advert is about, named by whoever made it
         const resultY = searchY + 130;
         ctx.fillStyle = BRAND_COLORS.white;
         ctx.beginPath();
@@ -835,10 +835,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Business Name (Invented only)
         ctx.fillStyle = BRAND_COLORS.nearBlack;
         ctx.font = 'bold 36px sans-serif';
-        ctx.fillText('Adeola Stitches & Tailoring', phoneX + 90, resultY + 65);
+        ctx.fillText(activeScene.screenText?.business || 'The business you dey check', phoneX + 90, resultY + 65);
 
         // 5 Gold Stars (Star gold #F5B301)
         ctx.fillStyle = BRAND_COLORS.starGold;
@@ -862,7 +861,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
         ctx.fillStyle = BRAND_COLORS.nearBlack;
         ctx.font = '28px sans-serif';
-        ctx.fillText('"Cloth was ready on time. Fit well!"', phoneX + 120, textY + 60);
+        ctx.fillText(activeScene.screenText?.quote || '"Dem do am as dem talk. Correct."', phoneX + 120, textY + 60);
         ctx.fillStyle = BRAND_COLORS.warmGrey;
         ctx.font = 'italic 24px sans-serif';
         ctx.fillText('Yarn wetin happen. Good or bad.', phoneX + 120, textY + 110);

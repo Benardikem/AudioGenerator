@@ -107,6 +107,18 @@ export interface AdvertScene {
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */
   clipFit?: 'slow' | 'loop' | 'hold';
   /**
+   * The words on the LegitAfrica search screen. Without these it showed a tailor's shop from the
+   * very first campaign on every advert.
+   */
+  screenText?: {
+    /** What is typed in the search box. */
+    query?: string;
+    /** The business found. */
+    business?: string;
+    /** The review shown under the stars. */
+    quote?: string;
+  };
+  /**
    * A card laid over the scene's picture — a bank alert, say — to show what the line is talking
    * about. Every word on it belongs to this advert; nothing is filled in from another campaign.
    */

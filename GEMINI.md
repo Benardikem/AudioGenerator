@@ -83,6 +83,9 @@ in production the server refuses to start without it.
   pauses runs far longer — so this override must stay available; the rest of the voiceover is
   shared out between the scenes that have no set length.
 
+- The `ui_search` screen's words come from the scene's `screenText` (search box, business found,
+  review quote). It used to name a tailor's shop from the first campaign on every advert. The
+  `ui_review` screen already takes its headline from the scene's own `voiceLine`.
 - A scene can carry an `overlay` card drawn over its picture — currently `debit_alert`, whose
   title, amount and two lines are typed by the user in the scene editor. This is how a campaign
   gets a graphic like a bank alert: as this scene's own words, editable, never hard-coded.

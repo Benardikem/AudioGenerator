@@ -61,6 +61,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [clipFit, setClipFit] = useState<'slow' | 'loop' | 'hold'>('slow');
   const [lengthSeconds, setLengthSeconds] = useState('');
   const [overlay, setOverlay] = useState<SceneOverlay | null>(null);
+  const [screenText, setScreenText] = useState<{ query?: string; business?: string; quote?: string }>({});
 
   useEffect(() => {
     if (scene) {
@@ -75,6 +76,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setClipFit(scene.clipFit || 'slow');
       setLengthSeconds(scene.lengthSeconds ? String(scene.lengthSeconds) : '');
       setOverlay(scene.overlay ?? null);
+      setScreenText(scene.screenText ?? {});
       setClipError(null);
     }
   }, [scene]);
@@ -162,6 +164,10 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       ...(videoSrc.trim() ? { clipFit } : {}),
       lengthSeconds: Number(lengthSeconds) > 0 ? Number(lengthSeconds) : undefined,
       overlay: overlay ?? undefined,
+      screenText:
+        sceneType === 'ui_search' && (screenText.query || screenText.business || screenText.quote)
+          ? screenText
+          : undefined,
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -556,6 +562,40 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           </div>
 
           {artworkSection}
+
+          {/* The words on the search screen. Without these every advert showed the same shop. */}
+          {sceneType === 'ui_search' && (
+            <div>
+              <label className="block text-xs font-bold text-[#181614] mb-1.5">What the search screen says</label>
+              <div className="space-y-1.5 bg-[#FBF8F1] p-2.5 rounded-2xl border border-[#E8A317]/40">
+                <input
+                  value={screenText.query ?? ''}
+                  onChange={(e) => setScreenText({ ...screenText, query: e.target.value })}
+                  maxLength={34}
+                  placeholder="Typed in the search box, e.g. Yaba flat agent"
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                />
+                <input
+                  value={screenText.business ?? ''}
+                  onChange={(e) => setScreenText({ ...screenText, business: e.target.value })}
+                  maxLength={34}
+                  placeholder="The business found, e.g. Sunrise Properties"
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614] font-semibold"
+                />
+                <input
+                  value={screenText.quote ?? ''}
+                  onChange={(e) => setScreenText({ ...screenText, quote: e.target.value })}
+                  maxLength={44}
+                  placeholder={'The review shown, e.g. "Dem collect money, no house."'}
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                />
+                <p className="text-[11px] text-[#6B6256]">
+                  Leave a box empty for the standard wording. Invent the business name — do not name a real
+                  one unless the story is your own.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* The fly-in text fields live in this column: in the left one they made the editor
               twice as tall as the right side, which was sitting empty. */}
