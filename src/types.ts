@@ -107,6 +107,11 @@ export interface AdvertScene {
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */
   clipFit?: 'slow' | 'loop' | 'hold';
   /**
+   * Small print at the foot of the end card: "Dramatisation · Names withheld". Settles for the
+   * viewer whether the advert is pointing at a real business.
+   */
+  disclaimer?: boolean;
+  /**
    * The words on the LegitAfrica search screen. Without these it showed a tailor's shop from the
    * very first campaign on every advert.
    */

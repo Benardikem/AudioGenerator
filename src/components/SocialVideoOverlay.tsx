@@ -837,7 +837,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
         ctx.fillStyle = BRAND_COLORS.nearBlack;
         ctx.font = 'bold 36px sans-serif';
-        ctx.fillText(activeScene.screenText?.business || 'The business you dey check', phoneX + 90, resultY + 65);
+        ctx.fillText(activeScene.screenText?.business || '*** Properties Ltd', phoneX + 90, resultY + 65);
 
         // 5 Gold Stars (Star gold #F5B301)
         ctx.fillStyle = BRAND_COLORS.starGold;
@@ -1133,6 +1133,13 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         const kudu = preloadedImages.current.get('/brand/legitafrica-icon-transparent.png');
         if (kudu && kudu.complete) {
           ctx.drawImage(kudu, (W - 70) / 2, panelY + 810, 70, 70);
+        }
+
+        if (activeScene.disclaimer) {
+          ctx.fillStyle = BRAND_COLORS.warmGrey;
+          ctx.font = '500 22px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Dramatisation  ·  Names withheld', W / 2, panelY + 930);
         }
       }
 

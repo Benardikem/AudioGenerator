@@ -62,6 +62,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [lengthSeconds, setLengthSeconds] = useState('');
   const [overlay, setOverlay] = useState<SceneOverlay | null>(null);
   const [screenText, setScreenText] = useState<{ query?: string; business?: string; quote?: string }>({});
+  const [disclaimer, setDisclaimer] = useState(false);
 
   useEffect(() => {
     if (scene) {
@@ -77,6 +78,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setLengthSeconds(scene.lengthSeconds ? String(scene.lengthSeconds) : '');
       setOverlay(scene.overlay ?? null);
       setScreenText(scene.screenText ?? {});
+      setDisclaimer(!!scene.disclaimer);
       setClipError(null);
     }
   }, [scene]);
@@ -168,6 +170,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
         sceneType === 'ui_search' && (screenText.query || screenText.business || screenText.quote)
           ? screenText
           : undefined,
+      disclaimer: sceneType === 'end_card' && disclaimer ? true : undefined,
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -563,6 +566,22 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
           {artworkSection}
 
+          {sceneType === 'end_card' && (
+            <label className="flex items-start gap-2 p-2.5 rounded-2xl bg-[#FBF8F1] border border-[#E8A317]/40 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={disclaimer}
+                onChange={(e) => setDisclaimer(e.target.checked)}
+                className="mt-0.5 accent-[#E8A317] cursor-pointer"
+              />
+              <span className="text-[11px] text-[#6B6256]">
+                <span className="block text-xs font-bold text-[#181614]">Show "Dramatisation · Names withheld"</span>
+                Small print at the foot of the end card, for an advert that acts out a scenario rather than
+                reporting a real case.
+              </span>
+            </label>
+          )}
+
           {/* The words on the search screen. Without these every advert showed the same shop. */}
           {sceneType === 'ui_search' && (
             <div>
@@ -579,7 +598,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   value={screenText.business ?? ''}
                   onChange={(e) => setScreenText({ ...screenText, business: e.target.value })}
                   maxLength={34}
-                  placeholder="The business found, e.g. Sunrise Properties"
+                  placeholder="The business found, e.g. *** Properties Ltd"
                   className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614] font-semibold"
                 />
                 <input

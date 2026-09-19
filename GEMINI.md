@@ -86,6 +86,9 @@ in production the server refuses to start without it.
 - The `ui_search` screen's words come from the scene's `screenText` (search box, business found,
   review quote). It used to name a tailor's shop from the first campaign on every advert. The
   `ui_review` screen already takes its headline from the scene's own `voiceLine`.
+- The search screen's business name falls back to `*** Properties Ltd` — a mask with nothing to
+  decode. Do not replace that default with a realistic-sounding name.
+- An `end_card` scene can show "Dramatisation · Names withheld" (`disclaimer: true`).
 - Never put a named business next to a bad review in an advert, in defaults, examples or generated
   scripts: an invented name may belong to a real business, and the claim is then defamatory. Good
   reviews may name a business; bad ones must not.
