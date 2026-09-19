@@ -58,6 +58,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [clipUploading, setClipUploading] = useState(false);
   const [clipError, setClipError] = useState<string | null>(null);
   const [clipLibrary, setClipLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
+  const [clipFit, setClipFit] = useState<'slow' | 'loop' | 'hold'>('slow');
 
   useEffect(() => {
     if (scene) {
@@ -69,6 +70,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setHeadline(scene.headline || '');
       setTextBackground(scene.textBackground || 'cream');
       setVideoSrc(scene.videoSrc || '');
+      setClipFit(scene.clipFit || 'slow');
       setClipError(null);
     }
   }, [scene]);
@@ -153,6 +155,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       visualPrompt: visualPrompt.trim() || scene.visualPrompt,
       imageSrc: imageSrc.trim() || scene.imageSrc,
       videoSrc: videoSrc.trim() || undefined,
+      ...(videoSrc.trim() ? { clipFit } : {}),
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -406,10 +409,33 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 )}
 
                 {videoSrc && !clipError && (
-                  <p className="text-[11px] text-[#6B6256]">
-                    This clip plays instead of the photo above. It loops if the scene runs longer than the
-                    clip, and is silent — the voiceover is the only sound.
-                  </p>
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] text-[#6B6256]">
+                      This clip plays instead of the photo above, and is silent — the voiceover is the only
+                      sound. If it is shorter than this scene ({timeLabel}):
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {([
+                        { id: 'slow', label: 'Slow it to fit', hint: 'Plays in slow motion so it lasts the whole line. Nothing repeats.' },
+                        { id: 'loop', label: 'Loop it', hint: 'Starts again from the beginning. You will see the jump back.' },
+                        { id: 'hold', label: 'Hold last frame', hint: 'Plays through, then stays on its final frame.' },
+                      ] as { id: 'slow' | 'loop' | 'hold'; label: string; hint: string }[]).map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          title={option.hint}
+                          onClick={() => setClipFit(option.id)}
+                          className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                            clipFit === option.id
+                              ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                              : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 {clipError && <p className="text-[11px] font-semibold text-red-700">{clipError}</p>}
 

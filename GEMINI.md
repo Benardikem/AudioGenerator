@@ -72,8 +72,12 @@ in production the server refuses to start without it.
   header on the saved-ads page). It lists every uploaded photo and clip with the adverts using
   each one, and deletes the unused. Deleting a file a saved advert still points at is refused by
   the server, not just hidden in the UI — keep it that way, so tidying up can never break an advert.
-- Clips are always muted and looped to fill their scene, and get no slow zoom — the footage already
-  moves. The voiceover is the only sound in an advert.
+- Clips are always muted and get no slow zoom — the footage already moves. The voiceover is the
+  only sound in an advert.
+- A clip shorter than its spoken line is filled by the scene's `clipFit`: `slow` (the default —
+  played in slow motion so nothing repeats), `loop` or `hold` (freeze on the last frame). The rule
+  lives in `clipFrameAt` in `src/utils/sceneTimeline.ts`; keep it there rather than inlining timing
+  maths in the canvas drawing.
 
 - Photo scenes draw only the scene's own photo. They used to draw fixed graphics from the first
   campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card, a WhatsApp chat) on top

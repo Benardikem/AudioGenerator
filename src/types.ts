@@ -86,6 +86,8 @@ export interface AdvertScene {
   textBackground?: 'cream' | 'photo';
   /** A video clip that plays as this scene's background instead of imageSrc. */
   videoSrc?: string;
+  /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */
+  clipFit?: 'slow' | 'loop' | 'hold';
   /** 2 = drawn by type, any number of scenes. Absent on ads saved when scenes were drawn by position. */
   layoutVersion?: 2;
 }

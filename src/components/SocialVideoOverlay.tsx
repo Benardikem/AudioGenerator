@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { sceneTimeline, sceneIndexAt, isBrandType } from '../utils/sceneTimeline';
+import { sceneTimeline, sceneIndexAt, isBrandType, clipFrameAt, ClipFit } from '../utils/sceneTimeline';
 import {
   Play,
   Pause,
@@ -183,14 +183,26 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     !!video && video.readyState >= 2 && video.videoWidth > 0;
 
   /**
-   * Holds the clip at the point of the scene it is playing under. A clip shorter than its scene
-   * loops; a longer one is cut off when the scene ends. While the preview is paused the element is
-   * parked on the matching frame so scrubbing shows the right moment.
+   * Holds the clip at the point of the scene it is playing under.
+   *
+   * A five-second clip under a seven-second line has to fill the gap somehow, and which way looks
+   * right depends on the shot, so the scene chooses: slow it down to fit (the default — AI footage
+   * takes slow motion well and nothing repeats), loop it back to the start, or hold on the last
+   * frame. A clip longer than its scene is simply cut off when the scene ends.
+   *
+   * While the preview is paused the element is parked on the matching frame, so scrubbing shows
+   * the moment the playhead is actually on.
    */
-  const syncSceneVideo = (video: HTMLVideoElement, timeIntoScene: number, playing: boolean) => {
-    const clip = video.duration;
-    if (!clip || !isFinite(clip) || clip <= 0) return;
-    const want = Math.max(0, timeIntoScene) % clip;
+  const syncSceneVideo = (
+    video: HTMLVideoElement,
+    timeIntoScene: number,
+    sceneDuration: number,
+    fit: ClipFit,
+    playing: boolean
+  ) => {
+    if (!video.duration || !isFinite(video.duration) || video.duration <= 0) return;
+    const { rate, time: want } = clipFrameAt(video.duration, timeIntoScene, sceneDuration, fit);
+    if (video.playbackRate !== rate) video.playbackRate = rate;
     if (playing) {
       if (video.paused) video.play().catch(() => {});
       // Only correct real drift: nudging it every frame would stutter the picture.
@@ -456,7 +468,15 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       });
       activeClipSrc.current = activeScene?.videoSrc ?? null;
     }
-    if (activeVideo) syncSceneVideo(activeVideo, time - span.start, isPlayingRef.current);
+    if (activeVideo) {
+      syncSceneVideo(
+        activeVideo,
+        time - span.start,
+        span.end - span.start,
+        activeScene?.clipFit ?? 'slow',
+        isPlayingRef.current
+      );
+    }
 
       ctx.clearRect(0, 0, W, H);
 

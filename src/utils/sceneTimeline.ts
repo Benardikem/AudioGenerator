@@ -49,6 +49,34 @@ export function estimateDuration(script: string): number {
   return Math.max(8, Math.round(wordCount(script) / 2.3));
 }
 
+export type ClipFit = 'slow' | 'loop' | 'hold';
+
+/**
+ * Where a clip should be, and how fast it should run, at a given moment in its scene.
+ *
+ * A five-second clip under a seven-second line has to fill the gap somehow, and which way looks
+ * right depends on the shot: slow it down so nothing repeats (the default — AI footage takes slow
+ * motion well), loop it back to the start, or play it through and hold the last frame. A clip
+ * longer than its scene is simply cut off when the scene ends.
+ */
+export function clipFrameAt(
+  clipDuration: number,
+  timeIntoScene: number,
+  sceneDuration: number,
+  fit: ClipFit = 'slow'
+): { rate: number; time: number } {
+  if (!clipDuration || !isFinite(clipDuration) || clipDuration <= 0) return { rate: 1, time: 0 };
+
+  // Below about half speed the motion starts to judder, so the rest is held instead.
+  const rate = fit === 'slow' && clipDuration < sceneDuration ? Math.max(0.5, clipDuration / sceneDuration) : 1;
+  const reached = Math.max(0, timeIntoScene) * rate;
+  if (reached < clipDuration) return { rate, time: reached };
+  return {
+    rate,
+    time: fit === 'loop' ? reached % clipDuration : Math.max(0, clipDuration - 0.05),
+  };
+}
+
 /** Renumber ids to match order and mark the list as using type-based drawing. */
 export function stampScenes(scenes: AdvertScene[]): AdvertScene[] {
   return scenes.map((s, i) => ({ ...s, id: i + 1, layoutVersion: 2 }));
