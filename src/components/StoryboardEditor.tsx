@@ -30,6 +30,8 @@ interface StoryboardEditorProps {
   scenes: AdvertScene[];
   activeSceneIndex: number;
   onSelectScene: (index: number) => void;
+  /** Jumps to the Preview step with this scene showing. Without it the canvas isn't on screen. */
+  onPreviewScene?: (index: number) => void;
   onUpdateScene: (updatedScenes: AdvertScene[]) => void;
   onSyncToScript: (newScript: string) => void;
   onResetScenes: () => void;
@@ -44,6 +46,7 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
   scenes,
   activeSceneIndex,
   onSelectScene,
+  onPreviewScene,
   onUpdateScene,
   onSyncToScript,
   onResetScenes,
@@ -369,7 +372,10 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
         timeLabel={modalScene ? timeLabel(modalScene.id - 1) : undefined}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSaveModalScene}
-        onPreview={onSelectScene}
+        onPreview={(idx) => {
+          setIsModalOpen(false);
+          (onPreviewScene ?? onSelectScene)(idx);
+        }}
       />
     </div>
   );

@@ -57,6 +57,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [videoSrc, setVideoSrc] = useState('');
   const [clipUploading, setClipUploading] = useState(false);
   const [clipError, setClipError] = useState<string | null>(null);
+  const [clipLibrary, setClipLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
 
   useEffect(() => {
     if (scene) {
@@ -71,6 +72,17 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setClipError(null);
     }
   }, [scene]);
+
+  // Every clip uploaded so far, so a scene can be put back on one without uploading it again.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetch('/api/scene-videos', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : { clips: [] }))
+      .then((d) => { if (!cancelled) setClipLibrary(Array.isArray(d.clips) ? d.clips : []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen]);
 
   if (!isOpen || !scene) return null;
 
@@ -115,13 +127,18 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     try {
       const res = await fetch('/api/scene-videos', {
         method: 'POST',
-        headers: { 'Content-Type': file.type || 'video/mp4' },
+        headers: { 'Content-Type': file.type || 'video/mp4', 'X-Clip-Name': file.name.replace(/[^\x20-\x7E]/g, '') },
         credentials: 'same-origin',
         body: file,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) throw new Error(data.error || 'The clip could not be uploaded.');
       setVideoSrc(data.url);
+      setClipLibrary((prev) =>
+        prev.some((c) => c.url === data.url)
+          ? prev
+          : [{ url: data.url, label: data.label || file.name, bytes: file.size }, ...prev]
+      );
     } catch (err: any) {
       setClipError(err?.message || 'The clip could not be uploaded.');
     } finally {
@@ -371,9 +388,26 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   )}
                 </div>
 
+                {clipLibrary.length > 0 && (
+                  <select
+                    value={videoSrc}
+                    onChange={(e) => setVideoSrc(e.target.value)}
+                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+                  >
+                    <option value="">No clip — show the photo above</option>
+                    {clipLibrary.map((clip) => (
+                      <option key={clip.url} value={clip.url}>
+                        {`Clip: ${clip.label} (${
+                          clip.bytes >= 1048576 ? `${(clip.bytes / 1048576).toFixed(1)} MB` : `${Math.round(clip.bytes / 1024)} KB`
+                        })`}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
                 {videoSrc && !clipError && (
                   <p className="text-[11px] text-[#6B6256]">
-                    Clip attached. It plays instead of the photo, loops if this scene runs longer than the
+                    This clip plays instead of the photo above. It loops if the scene runs longer than the
                     clip, and is silent — the voiceover is the only sound.
                   </p>
                 )}

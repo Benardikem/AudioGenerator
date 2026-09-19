@@ -755,6 +755,10 @@ export default function App() {
               scenes={scenes}
               activeSceneIndex={activeSceneIndex}
               onSelectScene={handleSelectScene}
+              onPreviewScene={(idx) => {
+                handleSelectScene(idx);
+                goToStep('video');
+              }}
               onUpdateScene={handleUpdateScenes}
               duration={activeCommercial?.duration || estimateDuration(script)}
               onSyncToScript={(newScript) => setScript(newScript)}

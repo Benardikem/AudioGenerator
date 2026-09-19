@@ -19,7 +19,21 @@ import os from "os";
  */
 
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
-const NAME = /^[a-f0-9]{32}\.(mp4|webm)$/;
+/** <32 hex of the clip's own contents>__<the name it was uploaded under>.<ext> */
+const NAME = /^[a-f0-9]{32}(__[A-Za-z0-9._-]{1,48})?\.(mp4|webm)$/;
+
+/** Keeps the uploaded file name recognisable in the picker without letting it name a path. */
+function safeLabel(raw: unknown) {
+  const base = String(raw ?? "").split(/[\\/]/).pop() ?? "";
+  const cleaned = base.replace(/\.[A-Za-z0-9]+$/, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned.slice(0, 48);
+}
+
+/** The name as the person typed it, read back out of the stored file name. */
+function labelOf(name: string) {
+  const m = /^[a-f0-9]{32}__(.+)\.(mp4|webm)$/.exec(name);
+  return m ? m[1] : "Clip";
+}
 
 /** Accepted uploads, by what the file actually starts with — not by the name or the stated type. */
 function sniff(bytes: Buffer): "mp4" | "webm" | null {
@@ -50,16 +64,44 @@ export function installSceneVideosApi(app: Express) {
         return res.status(400).json({ error: "Upload an MP4 or WebM clip. QuickTime .mov files will not play in every browser." });
       }
 
-      const name = `${crypto.randomBytes(16).toString("hex")}.${kind}`;
+      // Named after its own contents, so uploading the same clip again — to a second scene, or
+      // after switching a scene back to a photo — reuses the one file instead of storing it twice.
+      const hash = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 32);
+      let name = "";
       try {
-        fs.writeFileSync(path.join(dir, name), bytes);
+        const existing = fs.readdirSync(dir).find((f) => f.startsWith(hash) && NAME.test(f));
+        if (existing) {
+          name = existing;
+        } else {
+          const label = safeLabel(req.headers["x-clip-name"]);
+          name = `${hash}${label ? `__${label}` : ""}.${kind}`;
+          fs.writeFileSync(path.join(dir, name), bytes);
+        }
       } catch (err) {
         console.error("[clips] could not save", err);
         return res.status(500).json({ error: "The clip could not be saved on the server." });
       }
-      res.json({ url: `/api/scene-videos/${name}` });
+      res.json({ url: `/api/scene-videos/${name}`, label: labelOf(name) });
     }
   );
+
+  // Every clip uploaded so far, so a scene can go back to one instead of uploading it again.
+  app.get("/api/scene-videos", (_req: Request, res: Response) => {
+    let names: string[];
+    try {
+      names = fs.readdirSync(dir).filter((f) => NAME.test(f));
+    } catch {
+      return res.json({ clips: [] });
+    }
+    const clips = names
+      .map((name) => {
+        const stat = fs.statSync(path.join(dir, name));
+        return { url: `/api/scene-videos/${name}`, label: labelOf(name), bytes: stat.size, uploadedAt: stat.mtime.toISOString() };
+      })
+      .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt))
+      .slice(0, 200);
+    res.json({ clips });
+  });
 
   app.get("/api/scene-videos/:name", (req: Request, res: Response) => {
     const name = req.params.name;
@@ -76,7 +118,7 @@ export function installSceneVideosApi(app: Express) {
 
     res.setHeader("Content-Type", name.endsWith(".webm") ? "video/webm" : "video/mp4");
     res.setHeader("Accept-Ranges", "bytes");
-    // The name is random and its contents never change, so it can be cached for good.
+    // The name is the clip's own checksum, so these bytes never change: cache it for good.
     res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
 
     const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
