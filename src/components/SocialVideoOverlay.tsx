@@ -2278,7 +2278,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                     </div>
 
                     <p className="text-[11px] text-[#6B6256] leading-relaxed">
-                      <strong className="text-[#181614]">Visual:</strong> {scene.visualPrompt}
+                      <strong className="text-[#181614]">Visual:</strong>{' '}
+                      <span className="line-clamp-2">{scene.visualPrompt}</span>
                     </p>
                   </div>
                 </div>
@@ -2286,39 +2287,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             })}
           </div>
 
-          {/* Brand Rules Compliance Checklist */}
-          <div className="p-4 bg-[#FBF8F1] rounded-2xl border border-[#EAE3D4] space-y-2">
-            <h5 className="text-xs font-bold text-[#181614] flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-[#E8A317]" />
-              LegitAfrica Creative Brief Standards
-            </h5>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[#6B6256]">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#E8A317] font-bold">✓</span>
-                Exact 1080 × 1350 (4:5 portrait)
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#E8A317] font-bold">✓</span>
-                Official Cream `#FBF8F1` & Gold `#E8A317`
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#E8A317] font-bold">✓</span>
-                No green, blue, purple, or red colors
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#E8A317] font-bold">✓</span>
-                Authentic Nigerian Pidgin voiceover
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#E8A317] font-bold">✓</span>
-                No fake stats or review scores
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[#E8A317] font-bold">✓</span>
-                Official End Card with 3 pillars
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

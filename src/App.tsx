@@ -813,11 +813,10 @@ export default function App() {
 
         {/* PAGE 2: VIDEO STUDIO */}
         {activePage === 'video' && (
-          <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-200">
-            {/* Top Bar for Video Studio */}
-            <div className="flex flex-wrap items-center justify-between bg-white p-3 rounded-2xl border border-[#EAE3D4] shadow-xs gap-3">
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Which player is showing. A slim row rather than a card of its own — it is one choice. */}
+            <div className="flex items-center justify-end">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-[#181614] ml-2">Preview Mode:</span>
                 <div className="flex bg-[#F4EEE2] p-1 rounded-xl text-xs">
                   <button
                     type="button"
@@ -830,7 +829,7 @@ export default function App() {
                     }`}
                   >
                     <Smartphone className="w-3.5 h-3.5" />
-                    📱 Social Video ({aspectRatio})
+                    Social Video ({aspectRatio})
                   </button>
                   <button
                     type="button"
@@ -843,11 +842,10 @@ export default function App() {
                     }`}
                   >
                     <Radio className="w-3.5 h-3.5" />
-                    📻 Radio Jingle Mode
+                    Radio Jingle
                   </button>
                 </div>
               </div>
-
             </div>
 
             {/* Video Player or Visualizer */}
