@@ -324,13 +324,17 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const lastNotifiedSceneRef = useRef<number>(-1);
   const lastExternalSceneRef = useRef<number>(-1);
 
-  // Notify parent of active scene change only when index genuinely changes
+  // Tell the parent which scene is showing, but only while the advert is actually playing.
+  // Paused, the parent is the one in charge: it asks for a scene when you jump from the storyboard,
+  // and a redraw here — an image finishing loading, say — used to answer back with "scene 1" and
+  // cancel that jump.
   useEffect(() => {
+    if (!isPlaying) return;
     if (lastNotifiedSceneRef.current !== currentSceneIndex) {
       lastNotifiedSceneRef.current = currentSceneIndex;
       onSceneChange?.(currentSceneIndex);
     }
-  }, [currentSceneIndex, onSceneChange]);
+  }, [currentSceneIndex, onSceneChange, isPlaying]);
 
   // Current active subtitle text
   const currentCue = cues.find((c) => currentTime >= c.start && currentTime <= c.end);
@@ -1571,6 +1575,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
       // Route audio cleanly into stream using Web Audio destination (STRICTLY into stream, NOT to physical speakers!)
       let audioBufferSource: AudioBufferSourceNode | null = null;
+      let stopExportBed: (() => void) | null = null;
       let bgmBufferSource: AudioBufferSourceNode | null = null;
       let exportAudioCtx: AudioContext | null = null;
       try {
@@ -1611,6 +1616,12 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           }
         }
 
+        // 3. The built-in music bed. It is generated live rather than being a file, so it has to
+        // be played into the recording's own audio context or it never reaches the exported video.
+        if (bgmTheme === 'lofi' || bgmTheme === 'ambient') {
+          stopExportBed = soundEngine.renderBedInto(exportAudioCtx, dest, bgmTheme, Math.min(bgmVolume, 0.12));
+        }
+
         dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
       } catch (e) {
         console.warn('Audio capture routing note:', e);
@@ -1637,6 +1648,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       };
 
       recorder.onstop = () => {
+        stopExportBed?.();
+        stopExportBed = null;
         // Restore physical speaker mute state & volume
         if (audioRef.current) {
           audioRef.current.muted = prevMuted;
@@ -1898,9 +1911,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       )}
 
       {/* Main Grid: Left is 4:5 Portrait Frame, Right is 8 Scene Controller */}
-      <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left: 4:5 Portrait Video Frame */}
-        <div className="lg:col-span-5 flex flex-col items-center">
+        <div className="lg:order-2 flex flex-col items-center">
           {/* Quick Scene Selector Buttons */}
           <div className="w-full max-w-[360px] mb-2.5">
             <div className="flex items-center justify-between text-xs text-[#6B6256] mb-1.5 px-0.5">
@@ -2193,7 +2206,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         </div>
 
         {/* Right: Synchronized Scenes & Visual Storyboard */}
-        <div className="lg:col-span-7 space-y-5">
+        <div className="lg:order-1 space-y-5">
           <div className="flex items-center justify-between border-b border-[#EAE3D4] pb-3">
             <div>
               <h4 className="text-sm font-bold text-[#181614] flex items-center gap-2">

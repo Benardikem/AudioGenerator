@@ -2,9 +2,9 @@
 
 class CommercialAudioEngine {
   private ctx: AudioContext | null = null;
-  private bgmGain: GainNode | null = null;
   private isBgmPlaying = false;
-  private bgmInterval: any = null;
+  private stopBed: (() => void) | null = null;
+  private liveBedGain: GainNode | null = null;
 
   private getContext(): AudioContext {
     if (!this.ctx || this.ctx.state === 'closed') {
@@ -83,181 +83,154 @@ class CommercialAudioEngine {
     }
   }
 
-  // Start smooth background music bed tailored for video overlay (Lo-Fi or Ambient Pad)
+  /**
+   * Schedules the chord bed into any audio context and destination, and returns a stop function.
+   *
+   * Taking the context as an argument is what lets the exported video carry the music: the
+   * recording mixes into its own AudioContext, so a bed hard-wired to the speakers never reached
+   * the file. Same notes either way.
+   */
+  private scheduleBed(
+    ctx: AudioContext,
+    target: AudioNode,
+    theme: 'lofi' | 'ambient' | 'radio',
+    volume: number
+  ): { stop: () => void; gain: GainNode } {
+    const bedGain = ctx.createGain();
+    bedGain.gain.setValueAtTime(volume, ctx.currentTime);
+    bedGain.connect(target);
+
+    let alive = true;
+    const chordsFor = {
+      // Smooth neo-soul sevenths: Dm7 -> G7 -> Cmaj7 -> Am7
+      lofi: [
+        [146.83, 220.0, 261.63, 349.23],
+        [196.0, 246.94, 293.66, 349.23],
+        [130.81, 196.0, 246.94, 329.63],
+        [220.0, 261.63, 329.63, 392.0],
+      ],
+      ambient: [
+        [174.61, 220.0, 329.63],
+        [130.81, 196.0, 293.66],
+      ],
+      radio: [
+        [220, 261.63, 329.63],
+        [174.61, 220, 261.63],
+        [130.81, 164.81, 196.0],
+        [196.0, 246.94, 293.66],
+      ],
+    }[theme];
+
+    const voice = {
+      lofi: { type: 'sine' as OscillatorType, cutoff: 900, peak: 0.06, attack: 0.15, tail: 2.5, every: 2600, brush: true },
+      ambient: { type: 'triangle' as OscillatorType, cutoff: 600, peak: 0.04, attack: 0.8, tail: 3.8, every: 4000, brush: false },
+      radio: { type: 'triangle' as OscillatorType, cutoff: 1200, peak: 0.08, attack: 0.3, tail: 2.3, every: 2400, brush: false },
+    }[theme];
+
+    let step = 0;
+    const playStep = () => {
+      if (!alive) return;
+      const now = ctx.currentTime;
+      const chord = chordsFor[step % chordsFor.length];
+
+      chord.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const noteGain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = voice.type;
+        osc.frequency.setValueAtTime(freq, now + idx * 0.02);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(voice.cutoff, now);
+
+        noteGain.gain.setValueAtTime(0.001, now);
+        noteGain.gain.linearRampToValueAtTime(voice.peak, now + voice.attack);
+        noteGain.gain.exponentialRampToValueAtTime(0.001, now + voice.tail);
+
+        osc.connect(filter);
+        filter.connect(noteGain);
+        noteGain.connect(bedGain);
+
+        osc.start(now);
+        osc.stop(now + voice.tail + 0.1);
+      });
+
+      if (voice.brush) {
+        const brush = ctx.createOscillator();
+        const brushGain = ctx.createGain();
+        brush.frequency.setValueAtTime(65, now);
+        brushGain.gain.setValueAtTime(0.05, now);
+        brushGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        brush.connect(brushGain);
+        brushGain.connect(bedGain);
+        brush.start(now);
+        brush.stop(now + 0.16);
+      }
+
+      step++;
+    };
+
+    playStep();
+    const interval = setInterval(playStep, voice.every);
+    const stop = () => {
+      alive = false;
+      clearInterval(interval);
+      try {
+        bedGain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        setTimeout(() => bedGain.disconnect(), 400);
+      } catch {
+        try { bedGain.disconnect(); } catch {}
+      }
+    };
+    return { stop, gain: bedGain };
+  }
+
+  /** Plays the bed out loud, for the preview. */
   startBgmBed(volume = 0.14, theme: 'lofi' | 'ambient' | 'radio' = 'lofi') {
-    if (this.isBgmPlaying) {
-      this.stopBgmBed();
-    }
+    if (this.isBgmPlaying) this.stopBgmBed();
     try {
       const ctx = this.getContext();
       this.isBgmPlaying = true;
-
-      this.bgmGain = ctx.createGain();
-      this.bgmGain.gain.setValueAtTime(volume, ctx.currentTime);
-      this.bgmGain.connect(ctx.destination);
-
-      if (theme === 'lofi') {
-        // Smooth Neo-Soul / Lo-Fi 7th Chords (Dm7 -> G7 -> Cmaj7 -> Am7)
-        const lofiChords = [
-          [146.83, 220.0, 261.63, 349.23], // Dm7
-          [196.0, 246.94, 293.66, 349.23],  // G7
-          [130.81, 196.0, 246.94, 329.63], // Cmaj7
-          [220.0, 261.63, 329.63, 392.0],  // Am7
-        ];
-
-        let step = 0;
-        const playLofiStep = () => {
-          if (!this.isBgmPlaying || !this.bgmGain) return;
-          const now = ctx.currentTime;
-          const currentChord = lofiChords[step % lofiChords.length];
-
-          currentChord.forEach((freq, idx) => {
-            const osc = ctx.createOscillator();
-            const noteGain = ctx.createGain();
-            const filter = ctx.createBiquadFilter();
-
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, now + idx * 0.02);
-
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(900, now); // Warm lo-fi roll-off
-
-            noteGain.gain.setValueAtTime(0.001, now);
-            noteGain.gain.linearRampToValueAtTime(0.06, now + 0.15);
-            noteGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
-
-            osc.connect(filter);
-            filter.connect(noteGain);
-            noteGain.connect(this.bgmGain!);
-
-            osc.start(now);
-            osc.stop(now + 2.6);
-          });
-
-          // Soft lo-fi brush pulse
-          const noiseOsc = ctx.createOscillator();
-          const noiseGain = ctx.createGain();
-          noiseOsc.frequency.setValueAtTime(65, now);
-          noiseGain.gain.setValueAtTime(0.05, now);
-          noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-          noiseOsc.connect(noiseGain);
-          noiseGain.connect(this.bgmGain!);
-          noiseOsc.start(now);
-          noiseOsc.stop(now + 0.16);
-
-          step++;
-        };
-
-        playLofiStep();
-        this.bgmInterval = setInterval(playLofiStep, 2600);
-      } else if (theme === 'ambient') {
-        // Atmospheric pad with subtle slow swell
-        const ambientPads = [
-          [174.61, 220.0, 329.63], // Fmaj9
-          [130.81, 196.0, 293.66], // Cadd9
-        ];
-        let step = 0;
-        const playAmbientStep = () => {
-          if (!this.isBgmPlaying || !this.bgmGain) return;
-          const now = ctx.currentTime;
-          const chord = ambientPads[step % ambientPads.length];
-
-          chord.forEach((freq) => {
-            const osc = ctx.createOscillator();
-            const noteGain = ctx.createGain();
-            const filter = ctx.createBiquadFilter();
-
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(freq, now);
-
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(600, now);
-
-            noteGain.gain.setValueAtTime(0.001, now);
-            noteGain.gain.linearRampToValueAtTime(0.04, now + 0.8);
-            noteGain.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
-
-            osc.connect(filter);
-            filter.connect(noteGain);
-            noteGain.connect(this.bgmGain!);
-
-            osc.start(now);
-            osc.stop(now + 4.0);
-          });
-          step++;
-        };
-        playAmbientStep();
-        this.bgmInterval = setInterval(playAmbientStep, 4000);
-      } else {
-        // Harmonious chord progression (Am -> F -> C -> G) with warm filter
-        const chords = [
-          [220, 261.63, 329.63], // Am
-          [174.61, 220, 261.63], // F
-          [130.81, 164.81, 196.0], // C
-          [196.0, 246.94, 293.66], // G
-        ];
-
-        let step = 0;
-        const playStep = () => {
-          if (!this.isBgmPlaying || !this.bgmGain) return;
-          const now = ctx.currentTime;
-          const currentChord = chords[step % chords.length];
-
-          currentChord.forEach((freq) => {
-            const osc = ctx.createOscillator();
-            const noteGain = ctx.createGain();
-            const filter = ctx.createBiquadFilter();
-
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(freq, now);
-
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(1200, now);
-
-            noteGain.gain.setValueAtTime(0.001, now);
-            noteGain.gain.linearRampToValueAtTime(0.08, now + 0.3);
-            noteGain.gain.exponentialRampToValueAtTime(0.001, now + 2.3);
-
-            osc.connect(filter);
-            filter.connect(noteGain);
-            noteGain.connect(this.bgmGain!);
-
-            osc.start(now);
-            osc.stop(now + 2.4);
-          });
-
-          step++;
-        };
-
-        playStep();
-        this.bgmInterval = setInterval(playStep, 2400);
-      }
+      const bed = this.scheduleBed(ctx, ctx.destination, theme, volume);
+      this.stopBed = bed.stop;
+      this.liveBedGain = bed.gain;
     } catch (e) {
       console.warn('Could not start BGM bed:', e);
     }
   }
 
+  /**
+   * Plays the same bed into a recording's own audio, so the music is in the exported file.
+   * Returns a stop function for when the recording ends.
+   */
+  renderBedInto(
+    ctx: AudioContext,
+    target: AudioNode,
+    theme: 'lofi' | 'ambient' | 'radio',
+    volume: number
+  ): () => void {
+    try {
+      return this.scheduleBed(ctx, target, theme, volume).stop;
+    } catch (e) {
+      console.warn('Could not mix the music bed into the export:', e);
+      return () => {};
+    }
+  }
+
+
   stopBgmBed() {
     this.isBgmPlaying = false;
-    if (this.bgmInterval) {
-      clearInterval(this.bgmInterval);
-      this.bgmInterval = null;
+    if (this.stopBed) {
+      this.stopBed();
+      this.stopBed = null;
+      this.liveBedGain = null;
     }
     if (this.customAudioEl) {
       try {
         this.customAudioEl.pause();
         this.customAudioEl.currentTime = 0;
       } catch (_) {}
-    }
-    if (this.bgmGain && this.ctx) {
-      try {
-        this.bgmGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
-        setTimeout(() => {
-          this.bgmGain = null;
-        }, 450);
-      } catch {
-        this.bgmGain = null;
-      }
     }
   }
 
@@ -285,8 +258,8 @@ class CommercialAudioEngine {
     if (this.customAudioEl) {
       this.customAudioEl.volume = clamped;
     }
-    if (this.bgmGain && this.ctx) {
-      this.bgmGain.gain.setValueAtTime(clamped, this.ctx.currentTime);
+    if (this.liveBedGain && this.ctx) {
+      this.liveBedGain.gain.setValueAtTime(clamped, this.ctx.currentTime);
     }
   }
 

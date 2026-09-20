@@ -204,7 +204,7 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
               <button
                 key={scene.id}
                 type="button"
-                onClick={() => onSelectScene(idx)}
+                onClick={() => (onPreviewScene ?? onSelectScene)(idx)}
                 className={`py-2 px-1 min-w-[76px] flex-1 rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                   isActive
                     ? 'bg-[#E8A317] text-[#181614] border-[#E8A317] shadow-xs'
@@ -284,7 +284,7 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onSelectScene(idx)}
+                      onClick={() => (onPreviewScene ?? onSelectScene)(idx)}
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
                         isActive
                           ? 'bg-[#E8A317] text-[#181614]'
