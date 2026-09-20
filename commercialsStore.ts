@@ -110,6 +110,13 @@ export async function mediaUsage(): Promise<MediaUse[]> {
   return [...uses].map(([url, titles]) => ({ url, titles: [...titles] }));
 }
 
+/** Saves an image into the same store scene photos use, and gives back its URL. */
+export async function storeImage(bytes: Buffer, mime: string): Promise<string> {
+  if (!activeStore) throw new Error("The studio store is not running.");
+  const id = await activeStore.putImage({ bytes, mime });
+  return `/api/scene-images/${id}`;
+}
+
 export async function listStoredImages(): Promise<StoredImage[]> {
   return activeStore ? activeStore.listImages() : [];
 }

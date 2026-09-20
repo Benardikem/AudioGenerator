@@ -10,6 +10,7 @@ import { installAuth } from "./auth";
 import { installCommercialsApi } from "./commercialsStore";
 import { installSceneVideosApi } from "./sceneVideos";
 import { installMediaApi } from "./mediaApi";
+import { storeImage } from "./commercialsStore";
 
 /** Keep in step with MAX_SCENES in src/utils/sceneTimeline.ts. */
 const MAX_SCENES = 24;
@@ -370,6 +371,57 @@ Return ONLY the final spoken voiceover script. Do not include sound effects in b
   } catch (error: any) {
     console.error("Polish script error:", error);
     const { status, message } = geminiError(error, "The script could not be polished. Please try again.");
+    res.status(status).json({ error: message });
+  }
+});
+
+/**
+ * Makes a picture for a scene from its visual prompt.
+ *
+ * Uses Nano Banana (gemini-2.5-flash-image), which the free key can call — unlike the Pro image
+ * model, which has no free quota at all. The advert's look is appended here rather than typed
+ * every time, so generated stills sit alongside the filmed clips instead of looking like a
+ * different production.
+ */
+const IMAGE_MODEL = "gemini-2.5-flash-image";
+const HOUSE_STYLE =
+  "Photographed on a 35mm lens, shallow depth of field, natural available light, warm Lagos colour, " +
+  "fine film grain, documentary realism, no stylisation. Portrait framing, the subject centred with " +
+  "clear space above and below. A clean photograph with no lettering, signage or captions anywhere in it.";
+
+app.post("/api/generate-scene-image", async (req, res) => {
+  const prompt = String(req.body?.prompt ?? "").trim();
+  if (prompt.length < 8) {
+    return res.status(400).json({ error: "Write a visual prompt first — a sentence or two describing the shot." });
+  }
+  if (prompt.length > 2000) {
+    return res.status(400).json({ error: "That visual prompt is too long." });
+  }
+
+  try {
+    const ai = getGeminiClient();
+    const response = await ai.models.generateContent({
+      model: IMAGE_MODEL,
+      contents: `${prompt}\n\n${HOUSE_STYLE}`,
+      config: { responseModalities: [Modality.IMAGE] },
+    });
+
+    const parts = response?.candidates?.[0]?.content?.parts ?? [];
+    const image = parts.find((p: any) => p?.inlineData?.data);
+    if (!image) {
+      // A refusal comes back as words rather than a picture, so say so instead of failing silently.
+      const words = parts.find((p: any) => p?.text)?.text;
+      return res.status(502).json({
+        error: words ? `No picture came back: ${String(words).slice(0, 200)}` : "No picture came back. Try wording the shot differently.",
+      });
+    }
+
+    const bytes = Buffer.from(image.inlineData.data, "base64");
+    const url = await storeImage(bytes, image.inlineData.mimeType || "image/png");
+    res.json({ url });
+  } catch (error: any) {
+    console.error("Scene image generation error:", error);
+    const { status, message } = geminiError(error, "The picture could not be generated. Please try again.");
     res.status(status).json({ error: message });
   }
 });

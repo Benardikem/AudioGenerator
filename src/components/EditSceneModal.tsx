@@ -10,6 +10,7 @@ import {
   FileText,
   Video,
   Trash2,
+  Wand2,
   Clock,
   Eye,
 } from 'lucide-react';
@@ -59,6 +60,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [clipError, setClipError] = useState<string | null>(null);
   const [clipLibrary, setClipLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
   const [clipFit, setClipFit] = useState<'slow' | 'loop' | 'hold'>('slow');
+  const [drawing, setDrawing] = useState(false);
+  const [drawError, setDrawError] = useState<string | null>(null);
   const [lengthSeconds, setLengthSeconds] = useState('');
   const [overlay, setOverlay] = useState<SceneOverlay | null>(null);
   const [screenText, setScreenText] = useState<{ query?: string; business?: string; quote?: string }>({});
@@ -155,6 +158,33 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setClipError(err?.message || 'The clip could not be uploaded.');
     } finally {
       setClipUploading(false);
+    }
+  };
+
+  // Makes a picture from the visual prompt and drops it straight into this scene.
+  const handleGenerateImage = async () => {
+    const prompt = visualPrompt.trim();
+    if (!prompt) {
+      setDrawError('Write the visual prompt first, then press this.');
+      return;
+    }
+    setDrawError(null);
+    setDrawing(true);
+    try {
+      const res = await fetch('/api/generate-scene-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || 'The picture could not be generated.');
+      setImageSrc(data.url);
+      setVideoSrc('');
+    } catch (err: any) {
+      setDrawError(err?.message || 'The picture could not be generated.');
+    } finally {
+      setDrawing(false);
     }
   };
 
@@ -533,6 +563,28 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           </div>
 
           <div className="space-y-3">
+          {(sceneType === 'photo' || sceneType === 'end_card' || (sceneType === 'text' && textBackground === 'photo')) && (
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={handleGenerateImage}
+                disabled={drawing}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#181614] hover:bg-black disabled:opacity-60 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                <Wand2 className="w-3.5 h-3.5 text-[#E8A317]" />
+                {drawing ? 'Drawing the picture...' : 'Make a picture from this prompt'}
+              </button>
+              {drawError ? (
+                <p className="text-[11px] font-semibold text-red-700">{drawError}</p>
+              ) : (
+                <p className="text-[11px] text-[#6B6256]">
+                  Draws this scene from the words above and puts it in as the scene photo. Free, and you can
+                  press it again for a different one.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Scene length */}
           <div>
             <label className="block text-xs font-bold text-[#181614] mb-1.5">How long this scene holds</label>
