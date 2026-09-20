@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { listClips, removeClip } from "./sceneVideos";
+import { listClips, removeClip, isMusic } from "./sceneVideos";
 import { listStoredImages, mediaUsage, removeStoredImage } from "./commercialsStore";
 
 /**
@@ -13,7 +13,7 @@ import { listStoredImages, mediaUsage, removeStoredImage } from "./commercialsSt
  */
 
 const IMAGE_ID = /^[A-Za-z0-9_-]{1,128}$/;
-const CLIP_NAME = /^[a-f0-9]{32}(__[A-Za-z0-9._-]{1,48})?\.(mp4|webm)$/;
+const CLIP_NAME = /^[a-f0-9]{32}(__[A-Za-z0-9._-]{1,48})?\.(mp4|webm|mp3|m4a|wav|ogg)$/;
 
 export function installMediaApi(app: Express) {
   const usageFor = async () => {
@@ -24,7 +24,11 @@ export function installMediaApi(app: Express) {
   app.get("/api/media", async (_req: Request, res: Response) => {
     try {
       const used = await usageFor();
-      const clips = listClips().map((clip) => ({ ...clip, kind: "clip" as const, usedBy: used.get(clip.url) ?? [] }));
+      const clips = listClips().map((clip) => ({
+        ...clip,
+        kind: isMusic(clip.url) ? ("music" as const) : ("clip" as const),
+        usedBy: used.get(clip.url) ?? [],
+      }));
       const photos = (await listStoredImages()).map((image) => {
         const url = `/api/scene-images/${image.id}`;
         return {

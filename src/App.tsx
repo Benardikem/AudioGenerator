@@ -85,6 +85,7 @@ export default function App() {
   const [activeCommercialId, setActiveCommercialId] = useState<string | null>(null);
   const [campaignTitle, setCampaignTitle] = useState('LegitAfrica Commercial (Baritone Pidgin)');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('4:5');
+  const [bgm, setBgm] = useState('ambient');
   const [savedCommercials, setSavedCommercials] = useState<CommercialRecord[]>([]);
   const [isSavingDb, setIsSavingDb] = useState(false);
   const [dbNotice, setDbNotice] = useState<string | null>(null);
@@ -121,6 +122,7 @@ export default function App() {
         duration: activeCommercial?.duration,
         scenes: JSON.stringify(scenes),
         aspectRatio: aspectRatio,
+        bgm,
       });
       setActiveCommercialId(saved.id);
       setCampaignTitle(saved.title);
@@ -151,6 +153,7 @@ export default function App() {
     if (comm.aspectRatio === '9:16' || comm.aspectRatio === '4:5') {
       setAspectRatio(comm.aspectRatio as AspectRatio);
     }
+    setBgm(comm.bgm || 'ambient');
 
     // Restore scenes if stored
     if (comm.scenes) {
@@ -371,6 +374,7 @@ export default function App() {
     style: selectedStyle,
     scenes: JSON.stringify(scenes),
     aspectRatio,
+    bgm,
     audioUrl: activeCommercial?.audioUrl ?? null,
   });
   const savedState = savedAd
@@ -390,6 +394,7 @@ export default function App() {
           }
         })(),
         aspectRatio: savedAd.aspectRatio || '4:5',
+        bgm: savedAd.bgm || 'ambient',
         audioUrl: savedAd.audioUrl && savedAd.duration ? savedAd.audioUrl : null,
       })
     : null;
@@ -868,6 +873,8 @@ export default function App() {
                 isScriptOutOfSync={isScriptOutOfSync}
                 aspectRatio={aspectRatio}
                 onAspectRatioChange={setAspectRatio}
+                bgm={bgm}
+                onBgmChange={setBgm}
               />
             ) : (
               <AudioVisualizer

@@ -58,6 +58,9 @@ interface SocialVideoOverlayProps {
   isScriptOutOfSync?: boolean;
   aspectRatio?: AspectRatio;
   onAspectRatioChange?: (ratio: AspectRatio) => void;
+  /** The music chosen for this advert: a bed name, "off", or an uploaded track's url. */
+  bgm?: string;
+  onBgmChange?: (bgm: string) => void;
 }
 
 export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
@@ -75,6 +78,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   isScriptOutOfSync = false,
   aspectRatio = '4:5',
   onAspectRatioChange,
+  bgm,
+  onBgmChange,
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -103,34 +108,67 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const [voiceVolume, setVoiceVolume] = useState(1);
 
   // Background audio bed & Custom BGM uploader
-  const [bgmTheme, setBgmTheme] = useState<'off' | 'lofi' | 'ambient' | 'custom'>('ambient');
+  const [bgmTheme, setBgmThemeState] = useState<string>(bgm || 'ambient');
+  // The choice belongs to the advert, so it is saved and comes back when the advert is reopened.
+  const setBgmTheme = (value: string) => {
+    setBgmThemeState(value);
+    onBgmChange?.(value);
+  };
+  useEffect(() => {
+    if (bgm && bgm !== bgmTheme) setBgmThemeState(bgm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bgm]);
   const [bgmVolume, setBgmVolume] = useState(0.1);
   const [customBgmUrl, setCustomBgmUrl] = useState<string | null>(null);
   const [customBgmName, setCustomBgmName] = useState<string | null>(null);
+  const [musicLibrary, setMusicLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
+  const [musicError, setMusicError] = useState<string | null>(null);
+  /** The uploaded track to play, or null when one of the generated beds is chosen. */
+  const bgmTrackUrl = bgmTheme.startsWith('/api/') ? bgmTheme : bgmTheme === 'custom' ? customBgmUrl : null;
   const bgmFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleCustomBgmUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Kept on the server, like clips and photos, so the same track can be used on the next advert
+  // and so the exported video can fetch it.
+  const handleCustomBgmUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+    setMusicError(null);
     try {
-      const blobUrl = URL.createObjectURL(file);
-      setCustomBgmUrl(blobUrl);
-      setCustomBgmName(file.name);
-      setBgmTheme('custom');
-      if (isPlaying) {
-        soundEngine.startCustomAudio(blobUrl, bgmVolume);
-      }
-    } catch (err) {
-      console.error('Failed to load custom BGM file:', err);
+      const res = await fetch('/api/music', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'audio/mpeg', 'X-Clip-Name': file.name.replace(/[^\x20-\x7E]/g, '') },
+        credentials: 'same-origin',
+        body: file,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error || 'The track could not be uploaded.');
+      setMusicLibrary((prev) =>
+        prev.some((t) => t.url === data.url) ? prev : [{ url: data.url, label: data.label || file.name, bytes: file.size }, ...prev]
+      );
+      setCustomBgmUrl(data.url);
+      setCustomBgmName(data.label || file.name);
+      setBgmTheme(data.url as any);
+    } catch (err: any) {
+      setMusicError(err?.message || 'The track could not be uploaded.');
     }
   };
+
+  // Everything uploaded before, so a track can be reused without uploading it again
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/music', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : { tracks: [] }))
+      .then((d) => { if (!cancelled) setMusicLibrary(Array.isArray(d.tracks) ? d.tracks : []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Subtitle burned-in settings
   const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
   const [subtitleStyle, setSubtitleStyle] = useState<'gold_capsule' | 'star_contrast' | 'sand_card'>('gold_capsule');
 
   // Director's Scene Visual Action Banner on canvas (off by default for clean commercial output)
-  const [showActionOverlay, setShowActionOverlay] = useState(false);
 
   // Video recording / export state
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
@@ -396,8 +434,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         pendingPlayRef.current = false;
         audio.play().then(() => {
           setIsPlaying(true);
-          if (bgmTheme === 'custom' && customBgmUrl) {
-            soundEngine.startCustomAudio(customBgmUrl, bgmVolume);
+          if (bgmTrackUrl) {
+            soundEngine.startCustomAudio(bgmTrackUrl, bgmVolume);
           } else if (bgmTheme !== 'off') {
             soundEngine.startBgmBed(bgmTheme, bgmVolume);
           }
@@ -436,8 +474,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       });
     }
 
-    if (bgmTheme === 'custom' && customBgmUrl) {
-      soundEngine.startCustomAudio(customBgmUrl, bgmVolume);
+    if (bgmTrackUrl) {
+      soundEngine.startCustomAudio(bgmTrackUrl, bgmVolume);
     } else if (bgmTheme !== 'off') {
       soundEngine.startBgmBed(bgmTheme, bgmVolume);
     }
@@ -1342,34 +1380,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       // DIRECTOR'S SCENE VISUAL ACTION BANNER
       // Displays the active scene's Visual Prompt & Action directly on canvas (preview only, never in recording)
       // ----------------------------------------------------
-      if (showActionOverlay && !isRecordingVideo) {
-        ctx.save();
-        const actionBannerY = 135;
-        const bannerW = W - 120;
-        const bannerX = 60;
-        const bannerH = 58;
-
-        ctx.fillStyle = 'rgba(24, 22, 20, 0.9)';
-        ctx.beginPath();
-        ctx.roundRect(bannerX, actionBannerY, bannerW, bannerH, 16);
-        ctx.fill();
-        ctx.strokeStyle = BRAND_COLORS.gold;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        ctx.fillStyle = BRAND_COLORS.gold;
-        ctx.font = 'bold 19px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(`SCENE ${sceneIndex + 1} ACTION:`, bannerX + 24, actionBannerY + 36);
-
-        ctx.fillStyle = BRAND_COLORS.cream;
-        ctx.font = '500 19px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        const promptText = activeScene.visualPrompt;
-        const maxLen = 58;
-        const displayPrompt = promptText.length > maxLen ? promptText.slice(0, maxLen - 3) + '...' : promptText;
-        ctx.fillText(displayPrompt, bannerX + 225, actionBannerY + 36);
-        ctx.restore();
-      }
 
       // Bottom Gold Progress Line
       ctx.fillStyle = 'rgba(24, 22, 20, 0.15)';
@@ -1377,7 +1387,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       ctx.fillStyle = BRAND_COLORS.gold;
       ctx.fillRect(60, H - 24, (W - 120) * progress, 8);
     },
-    [sceneList, cues, subtitlesEnabled, subtitleStyle, showActionOverlay, spans]
+    [sceneList, cues, subtitlesEnabled, subtitleStyle, spans]
   );
 
   // Render static frame when paused or when time/scene/subtitles change
@@ -1598,9 +1608,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         audioBufferSource.connect(dest);
 
         // 2. Custom BGM track if active and theme is custom
-        if (bgmTheme === 'custom' && customBgmUrl) {
+        if (bgmTrackUrl) {
           try {
-            const bgmResp = await fetch(customBgmUrl);
+            const bgmResp = await fetch(bgmTrackUrl, { credentials: 'same-origin' });
             const bgmBuf = await bgmResp.arrayBuffer();
             const decodedBgm = await exportAudioCtx.decodeAudioData(bgmBuf);
             bgmBufferSource = exportAudioCtx.createBufferSource();
@@ -1619,7 +1629,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         // 3. The built-in music bed. It is generated live rather than being a file, so it has to
         // be played into the recording's own audio context or it never reaches the exported video.
         if (bgmTheme === 'lofi' || bgmTheme === 'ambient') {
-          stopExportBed = soundEngine.renderBedInto(exportAudioCtx, dest, bgmTheme, Math.min(bgmVolume, 0.12));
+          stopExportBed = soundEngine.renderBedInto(exportAudioCtx, dest, bgmTheme as 'lofi' | 'ambient', Math.min(bgmVolume, 0.12));
         }
 
         dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
@@ -1915,7 +1925,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         {/* Left: 4:5 Portrait Video Frame */}
         <div className="lg:order-2 flex flex-col items-center">
           {/* Quick Scene Selector Buttons */}
-          <div className="w-full max-w-[360px] mb-2.5">
+          <div className="w-full max-w-[460px] mb-2.5">
             <div className="flex items-center justify-between text-xs text-[#6B6256] mb-1.5 px-0.5">
               <span className="font-bold text-[#181614] flex items-center gap-1">
                 <Layers className="w-3.5 h-3.5 text-[#E8A317]" />
@@ -1958,7 +1968,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             </div>
           </div>
 
-          <div className="w-full max-w-[360px] flex items-center justify-between text-xs text-[#6B6256] mb-2 px-1">
+          <div className="w-full max-w-[460px] flex items-center justify-between text-xs text-[#6B6256] mb-2 px-1">
             <span className="font-semibold text-[#181614] flex items-center gap-1.5">
               <Camera className="w-3.5 h-3.5 text-[#E8A317]" />
               {currentVideoConfig.label} Frame ({currentVideoConfig.width}×{currentVideoConfig.height})
@@ -1973,8 +1983,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             id="phone-video-frame"
             style={{
               aspectRatio: activeRatio === '9:16' ? '9 / 16' : '4 / 5',
-              height: activeRatio === '9:16' ? '500px' : '450px',
-              maxWidth: activeRatio === '9:16' ? '282px' : '360px',
+              maxWidth: activeRatio === '9:16' ? '360px' : '460px',
             }}
             className="relative w-full bg-[#FBF8F1] rounded-[28px] border-4 border-[#181614] shadow-2xl overflow-hidden flex items-center justify-center cursor-pointer group"
             onClick={togglePlayPause}
@@ -2043,7 +2052,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
 
           {/* Transport Bar & Comprehensive Audio Controls */}
-          <div className="w-full max-w-[360px] space-y-2.5">
+          <div className="w-full max-w-[460px] space-y-2.5">
             {/* Scrubber Slider */}
             <input
               type="range"
@@ -2114,19 +2123,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5">
-                {/* Director Action HUD Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setShowActionOverlay(!showActionOverlay)}
-                  className={`px-2 py-1 rounded-lg font-semibold text-[11px] transition-all cursor-pointer border ${
-                    showActionOverlay
-                      ? 'bg-[#181614] text-white border-[#181614]'
-                      : 'bg-[#F4EEE2] text-[#6B6256] border-[#EAE3D4]'
-                  }`}
-                  title="Toggle Director's Visual Action HUD on video preview"
-                >
-                  Action HUD: {showActionOverlay ? 'ON' : 'OFF'}
-                </button>
 
                 {/* Subtitles Toggle */}
                 <button
@@ -2177,12 +2173,16 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 <span className="text-[10px] uppercase font-bold text-[#6B6256]">BGM:</span>
                 <select
                   value={bgmTheme}
-                  onChange={(e) => setBgmTheme(e.target.value as any)}
+                  onChange={(e) => setBgmTheme(e.target.value)}
                   className="bg-[#F4EEE2] border border-[#EAE3D4] rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#181614] cursor-pointer"
                 >
                   <option value="ambient">Ambient Bed</option>
                   <option value="lofi">Lofi Groove</option>
-                  {customBgmUrl && <option value="custom">Custom: {customBgmName.slice(0, 14)}...</option>}
+                  {musicLibrary.map((track) => (
+                    <option key={track.url} value={track.url}>
+                      {track.label.slice(0, 22)}
+                    </option>
+                  ))}
                   <option value="off">Off</option>
                 </select>
 
@@ -2195,7 +2195,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                   <span>Upload BGM</span>
                   <input
                     type="file"
-                    accept="audio/mp3,audio/wav,audio/mpeg,audio/aac"
+                    accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg"
                     onChange={handleCustomBgmUpload}
                     className="hidden"
                   />

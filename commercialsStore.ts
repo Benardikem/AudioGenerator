@@ -32,6 +32,8 @@ interface RecordBody {
   duration?: number;
   scenes?: string;
   aspectRatio?: string;
+  /** The music track laid under this advert, as a /api/scene-videos/... url. */
+  bgm?: string;
 }
 
 interface Audio {
@@ -101,6 +103,12 @@ export async function mediaUsage(): Promise<MediaUse[]> {
       continue; // unreadable scenes shouldn't make a file look unused and get deleted
     }
     if (!Array.isArray(scenes)) continue;
+    if (typeof row.record.bgm === "string" && row.record.bgm.startsWith("/api/")) {
+      if (!uses.has(row.record.bgm)) uses.set(row.record.bgm, new Map());
+      const byAdvert = uses.get(row.record.bgm)!;
+      if (!byAdvert.has(row.title)) byAdvert.set(row.title, new Set());
+      byAdvert.get(row.title)!.add(0); // 0 = the advert itself, not a scene
+    }
     scenes.forEach((scene, index) => {
       for (const url of [scene?.imageSrc, scene?.videoSrc]) {
         if (typeof url !== "string" || !url.startsWith("/api/")) continue;
@@ -114,7 +122,8 @@ export async function mediaUsage(): Promise<MediaUse[]> {
   return [...uses].map(([url, byAdvert]) => ({
     url,
     titles: [...byAdvert].map(([title, scenes]) => {
-      const numbers = [...scenes].sort((a, b) => a - b);
+      const numbers = [...scenes].sort((a, b) => a - b).filter((n) => n > 0);
+      if (numbers.length === 0) return `${title} · music`;
       return `${title} · scene${numbers.length > 1 ? "s" : ""} ${numbers.join(", ")}`;
     }),
   }));
@@ -231,6 +240,7 @@ function parseRecord(b: any): RecordBody | string {
   if (b.duration !== undefined && typeof b.duration !== "number") return "Invalid duration.";
   if (b.scenes !== undefined && !str(b.scenes, 500_000)) return "Scenes are too large.";
   if (b.aspectRatio !== undefined && !str(b.aspectRatio, 10)) return "Invalid aspect ratio.";
+  if (b.bgm !== undefined && b.bgm !== "" && !str(b.bgm, 300)) return "Invalid music track.";
 
   return {
     title: b.title,
@@ -242,6 +252,7 @@ function parseRecord(b: any): RecordBody | string {
     ...(b.duration !== undefined && { duration: b.duration }),
     ...(b.scenes !== undefined && { scenes: b.scenes }),
     ...(b.aspectRatio !== undefined && { aspectRatio: b.aspectRatio }),
+    ...(b.bgm !== undefined && { bgm: b.bgm }),
   };
 }
 

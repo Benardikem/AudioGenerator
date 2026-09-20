@@ -23,6 +23,8 @@ export interface CommercialRecord {
   duration?: number;
   scenes?: string; // JSON string of AdvertScene[]
   aspectRatio?: string;
+  /** Music under the advert: a bed name, "off", or an uploaded track's url. */
+  bgm?: string;
   createdAt?: string;
   updatedAt?: string;
 }

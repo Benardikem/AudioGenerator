@@ -19,8 +19,20 @@ import os from "os";
  */
 
 const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
-/** <32 hex of the clip's own contents>__<the name it was uploaded under>.<ext> */
-const NAME = /^[a-f0-9]{32}(__[A-Za-z0-9._-]{1,48})?\.(mp4|webm)$/;
+const MAX_MUSIC_BYTES = 20 * 1024 * 1024;
+/** <32 hex of the file's own contents>__<the name it was uploaded under>.<ext> */
+const NAME = /^[a-f0-9]{32}(__[A-Za-z0-9._-]{1,48})?\.(mp4|webm|mp3|m4a|wav|ogg)$/;
+const MUSIC_EXT = ["mp3", "m4a", "wav", "ogg"];
+const TYPES: Record<string, string> = {
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+};
+const extOf = (name: string) => name.split(".").pop()!.toLowerCase();
+export const isMusic = (name: string) => MUSIC_EXT.includes(extOf(name));
 
 /** Keeps the uploaded file name recognisable in the picker without letting it name a path. */
 function safeLabel(raw: unknown) {
@@ -34,8 +46,9 @@ function safeLabel(raw: unknown) {
  * names were kept fall back to a short piece of their checksum, so they can still be told apart.
  */
 function labelOf(name: string) {
-  const m = /^[a-f0-9]{32}__(.+)\.(mp4|webm)$/.exec(name);
-  return m ? m[1] : `Clip ${name.slice(0, 6)}`;
+  const m = /^[a-f0-9]{32}__(.+)\.(mp4|webm|mp3|m4a|wav|ogg)$/.exec(name);
+  if (m) return m[1];
+  return `${isMusic(name) ? "Track" : "Clip"} ${name.slice(0, 6)}`;
 }
 
 /** Accepted uploads, by what the file actually starts with — not by the name or the stated type. */
@@ -45,6 +58,18 @@ function sniff(bytes: Buffer): "mp4" | "webm" | null {
     return bytes.toString("latin1", 8, 10) === "qt" ? null : "mp4";
   }
   if (bytes.length > 4 && bytes.readUInt32BE(0) === 0x1a45dfa3) return "webm";
+  return null;
+}
+
+/** The same, for music tracks laid under an advert. */
+function sniffMusic(bytes: Buffer): "mp3" | "m4a" | "wav" | "ogg" | null {
+  if (bytes.length < 12) return null;
+  const head = bytes.toString("latin1", 0, 4);
+  if (head === "ID3") return "mp3";
+  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) return "mp3"; // a bare MPEG frame
+  if (head === "RIFF" && bytes.toString("latin1", 8, 12) === "WAVE") return "wav";
+  if (head === "OggS") return "ogg";
+  if (bytes.toString("latin1", 4, 8) === "ftyp") return "m4a"; // M4A/AAC shares the MP4 container
   return null;
 }
 
@@ -133,7 +158,37 @@ export function installSceneVideosApi(app: Express) {
 
   // Every clip uploaded so far, so a scene can go back to one instead of uploading it again.
   app.get("/api/scene-videos", (_req: Request, res: Response) => {
-    res.json({ clips: listClips().slice(0, 200) });
+    res.json({ clips: listClips().filter((c) => !isMusic(c.url)).slice(0, 200) });
+  });
+
+  // Music laid under an advert, kept here too so a track can be reused on the next one.
+  app.post("/api/music", express.raw({ type: () => true, limit: MAX_MUSIC_BYTES }), (req: Request, res: Response) => {
+    const bytes = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+    if (bytes.length === 0) return res.status(400).json({ error: "The track is empty." });
+
+    const kind = sniffMusic(bytes);
+    if (!kind) return res.status(400).json({ error: "Upload an MP3, M4A, WAV or OGG track." });
+
+    const hash = crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 32);
+    let name = "";
+    try {
+      const existing = fs.readdirSync(dir).find((f) => f.startsWith(hash) && NAME.test(f));
+      if (existing) {
+        name = existing;
+      } else {
+        const label = safeLabel(req.headers["x-clip-name"]);
+        name = `${hash}${label ? `__${label}` : ""}.${kind}`;
+        fs.writeFileSync(path.join(dir, name), bytes);
+      }
+    } catch (err) {
+      console.error("[music] could not save", err);
+      return res.status(500).json({ error: "The track could not be saved on the server." });
+    }
+    res.json({ url: `/api/scene-videos/${name}`, label: labelOf(name) });
+  });
+
+  app.get("/api/music", (_req: Request, res: Response) => {
+    res.json({ tracks: listClips().filter((c) => isMusic(c.url)).slice(0, 200) });
   });
 
   app.get("/api/scene-videos/:name", (req: Request, res: Response) => {
@@ -149,7 +204,7 @@ export function installSceneVideosApi(app: Express) {
       return res.status(404).json({ error: "Clip not found." });
     }
 
-    res.setHeader("Content-Type", name.endsWith(".webm") ? "video/webm" : "video/mp4");
+    res.setHeader("Content-Type", TYPES[extOf(name)] || "application/octet-stream");
     res.setHeader("Accept-Ranges", "bytes");
     // The name is the clip's own checksum, so these bytes never change: cache it for good.
     res.setHeader("Cache-Control", "private, max-age=31536000, immutable");

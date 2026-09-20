@@ -93,6 +93,10 @@ in production the server refuses to start without it.
 - Never put a named business next to a bad review in an advert, in defaults, examples or generated
   scripts: an invented name may belong to a real business, and the claim is then defamatory. Good
   reviews may name a business; bad ones must not.
+- Music under an advert is stored like clips and photos (`/api/music`, same media folder), chosen
+  per advert and saved with it as `bgm`. The two built-in beds are generated in the browser, so the
+  export plays them into its own audio context — do not wire them to the speakers only, or the
+  exported video comes out silent underneath the voice.
 - A scene can carry an `overlay` card drawn over its picture — currently `debit_alert`, whose
   title, amount and two lines are typed by the user in the scene editor. This is how a campaign
   gets a graphic like a bank alert: as this scene's own words, editable, never hard-coded.
