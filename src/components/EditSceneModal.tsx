@@ -59,6 +59,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [clipUploading, setClipUploading] = useState(false);
   const [clipError, setClipError] = useState<string | null>(null);
   const [clipLibrary, setClipLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
+  const [photoLibrary, setPhotoLibrary] = useState<{ url: string; bytes: number; uploadedAt: string }[]>([]);
   const [clipFit, setClipFit] = useState<'slow' | 'loop' | 'hold'>('slow');
   const [drawing, setDrawing] = useState(false);
   const [drawError, setDrawError] = useState<string | null>(null);
@@ -96,6 +97,10 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       .then((r) => (r.ok ? r.json() : { clips: [] }))
       .then((d) => { if (!cancelled) setClipLibrary(Array.isArray(d.clips) ? d.clips : []); })
       .catch(() => {});
+    fetch('/api/scene-images', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : { photos: [] }))
+      .then((d) => { if (!cancelled) setPhotoLibrary(Array.isArray(d.photos) ? d.photos : []); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [isOpen]);
 
@@ -120,6 +125,10 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) throw new Error(data.error || 'The photo could not be uploaded.');
       setImageSrc(data.url);
+      fetch('/api/scene-images', { credentials: 'same-origin' })
+        .then((r) => (r.ok ? r.json() : { photos: [] }))
+        .then((d) => setPhotoLibrary(Array.isArray(d.photos) ? d.photos : []))
+        .catch(() => {});
     } catch (err: any) {
       setUploadError(err?.message || 'The photo could not be uploaded.');
     } finally {
@@ -298,6 +307,19 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     Preset: {preset.label}
                   </option>
                 ))}
+                {photoLibrary.length > 0 && (
+                  <optgroup label="Photos you have uploaded">
+                    {photoLibrary.map((photo, i) => (
+                      <option key={photo.url} value={photo.url}>
+                        {`Photo ${photoLibrary.length - i} · ${
+                          photo.bytes >= 1048576
+                            ? `${(photo.bytes / 1048576).toFixed(1)} MB`
+                            : `${Math.max(1, Math.round(photo.bytes / 1024))} KB`
+                        } · ${new Date(photo.uploadedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
 
               {clipLibrary.length > 0 && (

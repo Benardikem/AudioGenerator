@@ -141,6 +141,15 @@ export function installCommercialsApi(app: Express) {
     res.json({ url: `/api/scene-images/${id}` });
   }));
 
+  app.get("/api/scene-images", route(async (_req, res) => {
+    const photos = (await store.listImages()).map((image) => ({
+      url: `/api/scene-images/${image.id}`,
+      bytes: image.bytes,
+      uploadedAt: new Date(image.createdAt).toISOString(),
+    }));
+    res.json({ photos: photos.slice(0, 200) });
+  }));
+
   app.get("/api/scene-images/:id", route(async (req, res) => {
     const image = ID.test(req.params.id) ? await store.getImage(req.params.id) : null;
     if (!image) return res.status(404).json({ error: "Photo not found." });
@@ -349,8 +358,12 @@ function postgresStore(connectionString: string): Store {
   return {
     async putImage(image) {
       await initImages();
-      const id = randomId();
-      await pool.query("INSERT INTO scene_images (id, mime, bytes) VALUES ($1, $2, $3)", [id, image.mime, image.bytes]);
+      // Named after the picture's own bytes, so uploading the same photo twice stores it once.
+      const id = crypto.createHash("sha256").update(image.bytes).digest("hex").slice(0, 32);
+      await pool.query(
+        "INSERT INTO scene_images (id, mime, bytes) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+        [id, image.mime, image.bytes]
+      );
       return id;
     },
     async getImage(id) {
@@ -419,8 +432,8 @@ function memoryStore(): Store {
 
   return {
     async putImage(image) {
-      const id = randomId();
-      images.set(id, image);
+      const id = crypto.createHash("sha256").update(image.bytes).digest("hex").slice(0, 32);
+      if (!images.has(id)) images.set(id, image);
       return id;
     },
     async getImage(id) {
