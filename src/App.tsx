@@ -634,7 +634,7 @@ export default function App() {
           <>
         {/* PAGE 1: SCRIPT & VOICE STUDIO */}
         {activePage === 'script' && (
-          <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-6 animate-in fade-in duration-200">
             {/* Audio Bridge Notice */}
             {activeCommercial ? (
               <div className="bg-emerald-50 border border-emerald-300 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
