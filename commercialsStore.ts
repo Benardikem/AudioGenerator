@@ -80,7 +80,7 @@ let activeStore: Store | null = null;
 export interface MediaUse {
   /** The media URL a saved advert points at. */
   url: string;
-  /** The adverts using it, by title. */
+  /** Where it is used, e.g. "Lagos landlord Palava · scene 9". */
   titles: string[];
 }
 
@@ -90,7 +90,9 @@ export interface MediaUse {
  */
 export async function mediaUsage(): Promise<MediaUse[]> {
   if (!activeStore) return [];
-  const uses = new Map<string, Set<string>>();
+  // url -> advert title -> the scene numbers in that advert, so the media screen can say exactly
+  // where a file is used rather than only which advert holds it.
+  const uses = new Map<string, Map<string, Set<number>>>();
   for (const row of await activeStore.list()) {
     let scenes: any[] = [];
     try {
@@ -99,15 +101,23 @@ export async function mediaUsage(): Promise<MediaUse[]> {
       continue; // unreadable scenes shouldn't make a file look unused and get deleted
     }
     if (!Array.isArray(scenes)) continue;
-    for (const scene of scenes) {
+    scenes.forEach((scene, index) => {
       for (const url of [scene?.imageSrc, scene?.videoSrc]) {
         if (typeof url !== "string" || !url.startsWith("/api/")) continue;
-        if (!uses.has(url)) uses.set(url, new Set());
-        uses.get(url)!.add(row.title);
+        if (!uses.has(url)) uses.set(url, new Map());
+        const byAdvert = uses.get(url)!;
+        if (!byAdvert.has(row.title)) byAdvert.set(row.title, new Set());
+        byAdvert.get(row.title)!.add(index + 1);
       }
-    }
+    });
   }
-  return [...uses].map(([url, titles]) => ({ url, titles: [...titles] }));
+  return [...uses].map(([url, byAdvert]) => ({
+    url,
+    titles: [...byAdvert].map(([title, scenes]) => {
+      const numbers = [...scenes].sort((a, b) => a - b);
+      return `${title} · scene${numbers.length > 1 ? "s" : ""} ${numbers.join(", ")}`;
+    }),
+  }));
 }
 
 /** Saves an image into the same store scene photos use, and gives back its URL. */

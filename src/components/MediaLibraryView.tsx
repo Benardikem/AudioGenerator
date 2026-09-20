@@ -177,7 +177,13 @@ export const MediaLibraryView: React.FC = () => {
                     {item.usedBy.length === 0 ? (
                       <span className="text-[#6B6256]">Not used</span>
                     ) : (
-                      <span className="font-semibold">{item.usedBy.join(', ')}</span>
+                      <ul className="space-y-0.5">
+                        {item.usedBy.map((use) => (
+                          <li key={use} className="font-semibold">
+                            {use}
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </td>
                   <td className={`${td} text-right`}>
