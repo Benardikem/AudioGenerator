@@ -609,7 +609,7 @@ export default function App() {
         )}
 
         {view === 'home' && (
-          <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
+          <div className="animate-in fade-in duration-200">
             <CampaignArchiveView
               savedCommercials={savedCommercials}
               onLoadCommercial={handleLoadSavedCommercial}
@@ -625,7 +625,7 @@ export default function App() {
         )}
 
         {view === 'media' && (
-          <div className="max-w-6xl mx-auto animate-in fade-in duration-200">
+          <div className="animate-in fade-in duration-200">
             <MediaLibraryView />
           </div>
         )}
@@ -790,7 +790,7 @@ export default function App() {
         {activePage === 'script' && nextStep('storyboard', 'Storyboard')}
 
         {activePage === 'storyboard' && (
-          <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in duration-200">
+          <div className="space-y-6 animate-in fade-in duration-200">
             <StoryboardEditor
               scenes={scenes}
               activeSceneIndex={activeSceneIndex}
