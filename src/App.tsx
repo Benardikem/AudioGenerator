@@ -458,7 +458,48 @@ export default function App() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          {view === 'ad' && (
+            <div className="flex items-center gap-2 min-w-0 grow">
+              <button
+                type="button"
+                onClick={goHome}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2] transition-all cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                All ads
+              </button>
+              <input
+                type="text"
+                value={campaignTitle}
+                onChange={(e) => setCampaignTitle(e.target.value)}
+                size={Math.min(34, Math.max(14, campaignTitle.length + 2))}
+                aria-label="Ad name"
+                title="Click to rename this ad"
+                className="min-w-0 max-w-[320px] font-bold text-sm text-[#181614] bg-white border border-[#EAE3D4] hover:border-[#E8A317] focus:border-[#E8A317] px-2.5 py-1.5 rounded-lg outline-none transition-colors"
+              />
+              <span
+                className={`text-[11px] font-semibold whitespace-nowrap ${
+                  saveStatus === 'saved' ? 'text-emerald-700' : 'text-[#C6860C]'
+                }`}
+              >
+                {saveStatus === 'saved' && 'Saved'}
+                {saveStatus === 'changed' && 'Unsaved changes'}
+                {saveStatus === 'new' && 'Not saved yet'}
+              </span>
+              {saveStatus === 'changed' && savedAd && (
+                <button
+                  type="button"
+                  onClick={() => handleLoadSavedCommercial(savedAd)}
+                  className="hidden sm:inline text-[11px] font-semibold text-[#6B6256] hover:text-[#181614] underline whitespace-nowrap cursor-pointer"
+                  title="Throw away unsaved changes and go back to the saved version"
+                >
+                  Discard changes
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 shrink-0">
             {view === 'home' && (
               <button
                 type="button"
@@ -490,6 +531,19 @@ export default function App() {
                 <span>New Ad</span>
               </button>
             )}
+            {view === 'ad' && (
+              <button
+                type="button"
+                id="save-ad-btn"
+                onClick={() => handleSaveCurrentCommercial(campaignTitle)}
+                disabled={isSavingDb || saveStatus === 'saved'}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] disabled:opacity-50 disabled:cursor-default transition-all font-bold text-xs cursor-pointer shadow-xs"
+              >
+                <Save className="w-4 h-4" />
+                {isSavingDb ? 'Saving...' : 'Save'}
+              </button>
+            )}
+
             <form method="post" action="/logout">
               <button
                 type="submit"
@@ -502,61 +556,10 @@ export default function App() {
           </div>
         </div>
 
-        {/* Inside an ad: its name, whether it's saved, and the three steps */}
+        {/* Inside an ad: the three steps. Its name, state and Save live in the row above. */}
         {view === 'ad' && (
           <div className="border-t border-[#EAE3D4] bg-[#FBF8F1]">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <button
-                  type="button"
-                  onClick={goHome}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2] transition-all cursor-pointer shrink-0"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  All ads
-                </button>
-                <input
-                  type="text"
-                  value={campaignTitle}
-                  onChange={(e) => setCampaignTitle(e.target.value)}
-                  size={Math.min(50, Math.max(20, campaignTitle.length + 2))}
-                  aria-label="Ad name"
-                  title="Click to rename this ad"
-                  className="min-w-0 font-bold text-sm text-[#181614] bg-white border border-[#EAE3D4] hover:border-[#E8A317] focus:border-[#E8A317] px-2.5 py-1.5 rounded-lg outline-none transition-colors"
-                />
-                <span
-                  className={`text-[11px] font-semibold whitespace-nowrap ${
-                    saveStatus === 'saved' ? 'text-emerald-700' : 'text-[#C6860C]'
-                  }`}
-                >
-                  {saveStatus === 'saved' && 'Saved'}
-                  {saveStatus === 'changed' && 'Unsaved changes'}
-                  {saveStatus === 'new' && 'Not saved yet'}
-                </span>
-                {saveStatus === 'changed' && savedAd && (
-                  <button
-                    type="button"
-                    onClick={() => handleLoadSavedCommercial(savedAd)}
-                    className="text-[11px] font-semibold text-[#6B6256] hover:text-[#181614] underline whitespace-nowrap cursor-pointer"
-                    title="Throw away unsaved changes and go back to the saved version"
-                  >
-                    Discard changes
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                id="save-ad-btn"
-                onClick={() => handleSaveCurrentCommercial(campaignTitle)}
-                disabled={isSavingDb || saveStatus === 'saved'}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] disabled:opacity-50 disabled:cursor-default transition-all font-bold text-xs cursor-pointer shadow-xs"
-              >
-                <Save className="w-4 h-4" />
-                {isSavingDb ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-
-            <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3 flex flex-wrap items-center gap-1.5">
+            <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center gap-1.5">
               {steps.map((step, i) => (
                 <React.Fragment key={step.id}>
                   {i > 0 && <ChevronRight className="w-4 h-4 text-[#DACFBE]" />}
