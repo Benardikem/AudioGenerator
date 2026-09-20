@@ -421,6 +421,15 @@ app.post("/api/generate-scene-image", async (req, res) => {
     res.json({ url });
   } catch (error: any) {
     console.error("Scene image generation error:", error);
+    // Every image model this key can reach reports a free-tier limit of zero, so a 429 here means
+    // "billing is off", not "come back tomorrow". Saying the latter would send the user away to wait
+    // for a reset that never comes.
+    if (/limit: 0|RESOURCE_EXHAUSTED|\b429\b|quota/i.test(String(error?.message ?? error))) {
+      return res.status(402).json({
+        error:
+          "Making pictures is not included in the free Gemini allowance — it needs billing switched on for the API key. Until then, make the picture in AI Studio and upload it with the button above.",
+      });
+    }
     const { status, message } = geminiError(error, "The picture could not be generated. Please try again.");
     res.status(status).json({ error: message });
   }
