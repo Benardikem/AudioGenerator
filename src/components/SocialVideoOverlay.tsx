@@ -2028,27 +2028,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             ) : null}
           </div>
 
-          {/* Active Scene Visual Action Card */}
-          <div className="w-full max-w-[360px] bg-[#FBF8F1] border border-[#EAE3D4] rounded-2xl p-3 my-2.5 shadow-xs text-left">
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="font-bold text-[#181614] flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#E8A317]" />
-                Scene {currentSceneIndex + 1} Visual Action & Prompt
-              </span>
-              {activeScene.visualPrompt !== ADVERT_SCENES[currentSceneIndex]?.visualPrompt && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E8A317] text-[#181614]">
-                  Custom Action
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-[#181614] font-medium leading-relaxed">
-              {activeScene.visualPrompt}
-            </p>
-            <div className="mt-2 pt-2 border-t border-[#EAE3D4] flex items-center justify-between text-[11px] text-[#6B6256]">
-              <span className="truncate italic max-w-[230px]">"{activeScene.voiceLine}"</span>
-              <span className="font-mono shrink-0 ml-2">{currentSceneIndex * 4}s–{(currentSceneIndex + 1) * 4}s</span>
-            </div>
-          </div>
 
           {/* Transport Bar & Comprehensive Audio Controls */}
           <div className="w-full max-w-[360px] space-y-2.5">
