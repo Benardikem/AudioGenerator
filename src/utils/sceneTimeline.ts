@@ -15,7 +15,39 @@ const BRAND_TYPES = ['logo', 'ui_search', 'ui_review', 'end_card'];
 /** The LegitAfrica screens (tell them, search, honest reviews, end card). Anything else shows a photo or text. */
 export const isBrandType = (type: AdvertScene['type']) => BRAND_TYPES.includes(type);
 
-const wordCount = (s?: string) => (s || '').trim().split(/\s+/).filter(Boolean).length;
+/** Words it takes to say a number aloud: 85 -> 2 ("eighty five"), 84000 -> 3, 300000 -> 3. */
+function spokenNumberWords(n: number): number {
+  if (!isFinite(n) || n < 0) return 1;
+  n = Math.floor(n);
+  if (n < 20) return 1;
+  if (n < 100) return n % 10 ? 2 : 1;
+  if (n < 1000) return 2 + (n % 100 ? spokenNumberWords(n % 100) : 0);
+  if (n < 1_000_000) return spokenNumberWords(n / 1000) + 1 + (n % 1000 ? spokenNumberWords(n % 1000) : 0);
+  return spokenNumberWords(n / 1_000_000) + 1 + (n % 1_000_000 ? spokenNumberWords(n % 1_000_000) : 0);
+}
+
+/**
+ * Roughly how many words are spoken, which is what a scene's share of the voiceover is based on.
+ * Counting what is written undercounts badly on money lines: "eighty-five" is two words aloud,
+ * "84k" is three, and "₦300,000" is four with the "naira" — and those are exactly the lines a
+ * narrator slows down on.
+ */
+const wordCount = (s?: string) =>
+  (s || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .reduce((total, token) => {
+      const money = /^[₦$£€]/.test(token);
+      const digits = /^[₦$£€]?([\d,.]+)([kKmM])?/.exec(token);
+      if (digits) {
+        const base = parseFloat(digits[1].replace(/,/g, ''));
+        const scale = digits[2] ? (/k/i.test(digits[2]) ? 1000 : 1_000_000) : 1;
+        return total + spokenNumberWords(base * scale) + (money ? 1 : 0);
+      }
+      // "eighty-five", "two-bedroom": each part is spoken
+      return total + token.split('-').filter(Boolean).length;
+    }, 0);
 
 export interface SceneSpan {
   start: number;
