@@ -873,6 +873,7 @@ export default function App() {
                 isScriptOutOfSync={isScriptOutOfSync}
                 aspectRatio={aspectRatio}
                 onAspectRatioChange={setAspectRatio}
+                title={campaignTitle}
                 bgm={bgm}
                 onBgmChange={setBgm}
               />

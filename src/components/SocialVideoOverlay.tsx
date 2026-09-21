@@ -58,6 +58,8 @@ interface SocialVideoOverlayProps {
   isScriptOutOfSync?: boolean;
   aspectRatio?: AspectRatio;
   onAspectRatioChange?: (ratio: AspectRatio) => void;
+  /** The advert's name, used to name the files it produces. */
+  title?: string;
   /** The music chosen for this advert: a bed name, "off", or an uploaded track's url. */
   bgm?: string;
   onBgmChange?: (bgm: string) => void;
@@ -78,6 +80,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   isScriptOutOfSync = false,
   aspectRatio = '4:5',
   onAspectRatioChange,
+  title,
   bgm,
   onBgmChange,
 }) => {
@@ -123,6 +126,13 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const [customBgmName, setCustomBgmName] = useState<string | null>(null);
   const [musicLibrary, setMusicLibrary] = useState<{ url: string; label: string; bytes: number }[]>([]);
   const [musicError, setMusicError] = useState<string | null>(null);
+  /** The advert's name as a file name: "Lagos landlord Palava" -> "lagos-landlord-palava". */
+  const fileStem =
+    (title || 'legit-africa-commercial')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'legit-africa-commercial';
   /** The uploaded track to play, or null when one of the generated beds is chosen. */
   const bgmTrackUrl = bgmTheme.startsWith('/api/') ? bgmTheme : bgmTheme === 'custom' ? customBgmUrl : null;
   const bgmFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1570,7 +1580,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           try {
             const a = document.createElement('a');
             a.href = res.url;
-            a.download = 'legit-africa-commercial-4x5.mp4';
+            a.download = `${fileStem}-${activeRatio.replace(':', 'x')}.mp4`;
             document.body.appendChild(a);
             a.click();
             setTimeout(() => {
@@ -1685,7 +1695,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
       const recorder = new MediaRecorder(
         stream,
-        mimeType ? { mimeType, videoBitsPerSecond: 6000000 } : undefined
+        mimeType ? { mimeType, videoBitsPerSecond: 4500000 } : undefined
       );
       activeRecorderRef.current = recorder;
 
@@ -1733,7 +1743,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             try {
               const a = document.createElement('a');
               a.href = mp4Res.url;
-              a.download = 'legit-africa-commercial-4x5.mp4';
+              a.download = `${fileStem}-${activeRatio.replace(':', 'x')}.mp4`;
               document.body.appendChild(a);
               a.click();
               setTimeout(() => {
@@ -1803,7 +1813,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
   const handleDownloadSRT = () => {
     const srtContent = exportToSRT(cues);
-    downloadFile(srtContent, 'legit-africa-pidgin-advert.srt', 'text/plain');
+    downloadFile(srtContent, `${fileStem}-captions.srt`, 'text/plain');
   };
 
   return (
@@ -1887,7 +1897,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           <a
             id="download-voiceover-wav-btn"
             href={audioUrl}
-            download="legit-africa-pidgin-voiceover.wav"
+            download={`${fileStem}-voiceover.wav`}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] rounded-xl transition-all cursor-pointer shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
@@ -2417,7 +2427,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               {exportedMp4Url ? (
                 <a
                   href={exportedMp4Url}
-                  download="legit-africa-commercial-4x5.mp4"
+                  download={`${fileStem}-${activeRatio.replace(':', 'x')}.mp4`}
                   className="w-full py-3.5 px-4 rounded-xl bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] font-bold text-sm flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
                 >
                   <Download className="w-4 h-4" />
@@ -2459,7 +2469,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 {exportedVideoUrl && (
                   <a
                     href={exportedVideoUrl}
-                    download="legit-africa-commercial-4x5.webm"
+                    download={`${fileStem}-${activeRatio.replace(':', 'x')}.webm`}
                     className="py-2 px-2.5 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] font-semibold text-xs flex items-center justify-center gap-1 border border-[#EAE3D4] cursor-pointer text-center"
                     title="Download raw WebM file for web archives"
                   >

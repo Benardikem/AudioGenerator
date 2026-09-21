@@ -604,8 +604,10 @@ app.post("/api/convert-to-mp4", (req, res) => {
     // Convert via ffmpeg to standard Social-Media MP4:
     // -r 30 : locks 30fps to avoid Chrome's 1k tbr variable framerate slowdown
     // -c:v libx264 : standard H.264 video codec required by Instagram, TikTok, FB, WhatsApp
-    // -preset ultrafast : blazingly fast encoding (~15s instead of minutes)
-    // -crf 20 : high visual clarity at ultrafast preset
+    // -preset veryfast : ultrafast made files four times larger for no visible gain — it trades
+    //   compression away for speed, and an 85-second advert came out at 82 MB
+    // -crf 23 : the usual sweet spot for social video
+    // -maxrate/-bufsize : keeps a busy scene from spiking the file size
     // -pix_fmt yuv420p : 8-bit YUV 4:2:0 format required for mobile hardware decoding
     // -c:a aac : universal AAC audio codec
     // -b:a 192k : high fidelity stereo audio
@@ -616,11 +618,13 @@ app.post("/api/convert-to-mp4", (req, res) => {
       "-i", inputPath,
       "-r", "30",
       "-c:v", "libx264",
-      "-preset", "ultrafast",
-      "-crf", "20",
+      "-preset", "veryfast",
+      "-crf", "23",
+      "-maxrate", "4M",
+      "-bufsize", "8M",
       "-pix_fmt", "yuv420p",
       "-c:a", "aac",
-      "-b:a", "192k",
+      "-b:a", "128k",
       "-movflags", "+faststart",
       "-threads", "0",
       outputPath,
@@ -629,15 +633,16 @@ app.post("/api/convert-to-mp4", (req, res) => {
     const ffmpeg = spawn("ffmpeg", args);
     let stderrData = "";
 
-    // 60-second safety timeout so it never hangs indefinitely
+    // Safety timeout so it never hangs indefinitely. Longer than it was: veryfast is slower than
+    // ultrafast, and a 90-second advert on a two-core box needs the room.
     const timeout = setTimeout(() => {
-      console.error("FFmpeg conversion timed out after 60s, terminating process...");
+      console.error("FFmpeg conversion timed out, terminating process...");
       ffmpeg.kill("SIGKILL");
       if (!res.headersSent) {
         res.status(504).json({ error: "Video conversion timed out. Please try again." });
       }
       cleanup();
-    }, 60000);
+    }, 180000);
 
     ffmpeg.stderr.on("data", (chunk) => {
       stderrData += chunk.toString();
