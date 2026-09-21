@@ -517,10 +517,27 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   };
 
   // 1080 x 1350 (4:5) Portrait Canvas Drawing Function (zero flicker)
+  /**
+   * The advert is composed at 1080x1350 whatever the chosen frame, then placed into it. A 9:16
+   * frame is 1920 tall, and the drawing below is full of fixed positions written for 1350 — before
+   * this, the picture simply stopped 570 pixels short of the bottom.
+   */
+  const designCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const getDesignCanvas = () => {
+    if (!designCanvasRef.current) {
+      const c = document.createElement('canvas');
+      c.width = VIDEO_CONFIG.width;
+      c.height = VIDEO_CONFIG.height;
+      designCanvasRef.current = c;
+    }
+    return designCanvasRef.current;
+  };
+
   const drawSceneToCanvas = useCallback((timeToDraw: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const design = getDesignCanvas();
+    const ctx = design.getContext('2d');
     if (!ctx) return;
 
     const W = VIDEO_CONFIG.width; // 1080
@@ -1433,6 +1450,31 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       ctx.fillRect(60, H - 24, W - 120, 8);
       ctx.fillStyle = BRAND_COLORS.gold;
       ctx.fillRect(60, H - 24, (W - 120) * progress, 8);
+
+      // Place the composed advert into the frame that is showing. Taller frames get a blurred,
+      // enlarged copy behind it rather than empty bands — the usual treatment for a 4:5 advert
+      // posted as a Reel or a TikTok.
+      const out = canvas.getContext('2d');
+      if (!out) return;
+      const frameW = canvas.width;
+      const frameH = canvas.height;
+      out.clearRect(0, 0, frameW, frameH);
+      if (frameW === W && frameH === H) {
+        out.drawImage(design, 0, 0);
+      } else {
+        const fill = Math.max(frameW / W, frameH / H);
+        const fw = W * fill;
+        const fh = H * fill;
+        out.save();
+        out.filter = 'blur(40px)';
+        out.drawImage(design, (frameW - fw) / 2, (frameH - fh) / 2, fw, fh);
+        out.restore();
+
+        const fit = Math.min(frameW / W, frameH / H);
+        const dw = W * fit;
+        const dh = H * fit;
+        out.drawImage(design, (frameW - dw) / 2, (frameH - dh) / 2, dw, dh);
+      }
     },
     [sceneList, cues, subtitlesEnabled, subtitleStyle, spans]
   );
@@ -1443,6 +1485,12 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       drawSceneToCanvas(currentTime);
     }
   }, [isPlaying, currentTime, drawSceneToCanvas]);
+
+  // Switching frame changes the canvas size, which wipes it. Nothing else here depends on the
+  // ratio, so without this the 9:16 preview sat empty until the advert was played.
+  useEffect(() => {
+    drawSceneToCanvas(currentTimeRef.current);
+  }, [activeRatio, drawSceneToCanvas]);
 
   // Handle external jump request and force-redraw on sceneVersion or scenes updates
   useEffect(() => {
