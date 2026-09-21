@@ -184,10 +184,12 @@ export default function App() {
       };
       setActiveCommercial(loadedTake);
       setTakes([loadedTake]);
+      setPendingTake(null);
     } else {
       // Without this, opening an ad that has no voiceover kept playing the previous ad's audio.
       setActiveCommercial(null);
       setTakes([]);
+      setPendingTake(null);
     }
 
     setActivePage('script');
@@ -224,6 +226,7 @@ export default function App() {
     // Clear old audio takes and active commercial so previous commercial never lingers
     setActiveCommercial(null);
     setTakes([]);
+    setPendingTake(null);
     setActivePage('script');
     setView('ad');
     window.scrollTo(0, 0);
@@ -300,7 +303,17 @@ export default function App() {
 
   const selectedVoiceObj = VOICE_OPTIONS.find((v) => v.id === selectedVoice) || VOICE_OPTIONS[0];
 
-  const handleGenerateAudio = async () => {
+  const [offerBackupVoice, setOfferBackupVoice] = useState(false);
+  // A new voiceover made on the script screen waits here until the person has listened to it and
+  // chosen it, so a worse take never silently replaces a good one.
+  const [pendingTake, setPendingTake] = useState<GeneratedCommercial | null>(null);
+  const lastPrelisten = useRef(false);
+
+  // allowBackup: only after the person has agreed to the older voice engine, which reads Pidgin
+  // noticeably less naturally than the main one. prelisten: hold the new take for approval when
+  // the ad already has a voiceover.
+  const handleGenerateAudio = async (allowBackup = false, prelisten = lastPrelisten.current) => {
+    lastPrelisten.current = prelisten;
     if (!script.trim()) return;
 
     setIsGenerating(true);
@@ -317,11 +330,16 @@ export default function App() {
           voice: cleanVoice,
           style: selectedStyle,
           timbre: selectedTimbre,
+          allowBackup,
         }),
       });
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
+        if (errData.backupAvailable) {
+          setOfferBackupVoice(true);
+          return;
+        }
         throw new Error(errData.error || `Server error (${response.status})`);
       }
 
@@ -339,10 +357,14 @@ export default function App() {
         createdAt: Date.now(),
       };
 
-      setActiveCommercial(newTake);
+      if (prelisten && activeCommercial) {
+        setPendingTake(newTake);
+      } else {
+        setActiveCommercial(newTake);
+      }
       setTakes((prev) => [newTake, ...prev]);
       if (data.usedBackupModel) {
-        setDbNotice("Voiced with the backup voice model: today's free allowance on the main one is used up. It may sound slightly different.");
+        setDbNotice('Made with the backup voice engine, as you chose. Regenerate after 8am for the main one.');
         setTimeout(() => setDbNotice(null), 8000);
       }
     } catch (err: any) {
@@ -658,6 +680,7 @@ export default function App() {
                       Narrator: {activeCommercial.voiceName} • {activeCommercial.style.replace('_', ' ')}
                     </p>
                   </div>
+                  <audio key={activeCommercial.id} src={activeCommercial.audioUrl} controls preload="metadata" className="h-9 max-w-[260px]" />
                 </div>
                 <button
                   type="button"
@@ -715,7 +738,7 @@ export default function App() {
                 <button
                   id="generate-commercial-audio-btn"
                   type="button"
-                  onClick={handleGenerateAudio}
+                  onClick={() => handleGenerateAudio(false, true)}
                   disabled={isGenerating || !script.trim()}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 text-sm font-bold text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] active:scale-98 rounded-xl shadow-xs hover:shadow-md transition-all disabled:opacity-50 cursor-pointer"
                 >
@@ -732,6 +755,40 @@ export default function App() {
                   )}
                 </button>
               </div>
+
+              {pendingTake && (
+                <div id="prelisten-take" className="mt-5 p-4 rounded-2xl border-2 border-[#E8A317] bg-[#FBF8F1] space-y-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-[#181614]">Listen before you use it</h4>
+                    <p className="text-xs text-[#6B6256]">
+                      New take: {pendingTake.voiceName} • {pendingTake.style.replace('_', ' ')} ({Math.round(pendingTake.duration)}s).
+                      Your ad still uses the current voiceover until you choose this one.
+                    </p>
+                  </div>
+                  <audio key={pendingTake.id} src={pendingTake.audioUrl} controls autoPlay className="w-full" />
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setPendingTake(null)}
+                      className="px-4 py-2 text-xs font-bold text-[#181614] bg-white border border-[#EAE3D4] hover:bg-[#F4EEE2] rounded-xl cursor-pointer"
+                    >
+                      Keep the current voiceover
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveCommercial(pendingTake);
+                        setPendingTake(null);
+                        setDbNotice('New voiceover in use. If you matched scenes to the old one, press "Match scenes to voiceover" again.');
+                        setTimeout(() => setDbNotice(null), 8000);
+                      }}
+                      className="px-4 py-2 text-xs font-bold text-white bg-[#181614] hover:bg-black rounded-xl cursor-pointer"
+                    >
+                      Use this voiceover
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Audio Takes History */}
@@ -812,7 +869,7 @@ export default function App() {
               audioUrl={activeCommercial?.audioUrl}
               onSyncToScript={(newScript) => setScript(newScript)}
               onResetScenes={() => handleUpdateScenes(ADVERT_SCENES)}
-              onGenerateAudio={handleGenerateAudio}
+              onGenerateAudio={() => handleGenerateAudio(false, false)}
               isGeneratingAudio={isGenerating}
               onGenerateScenesFromCurrentScript={handleGenerateScenesFromCurrentScript}
             />
@@ -869,7 +926,7 @@ export default function App() {
                 externalSceneIndex={activeSceneIndex}
                 sceneVersion={sceneVersion}
                 onSceneChange={handleSceneChange}
-                onGenerateAudioClick={handleGenerateAudio}
+                onGenerateAudioClick={() => handleGenerateAudio(false, false)}
                 isGeneratingAudio={isGenerating}
                 isScriptOutOfSync={isScriptOutOfSync}
                 aspectRatio={aspectRatio}
@@ -893,6 +950,19 @@ export default function App() {
           </>
         )}
       </main>
+
+      <ConfirmationModal
+        isOpen={offerBackupVoice}
+        title="Today's main voice is used up"
+        message="You've made today's 10 voiceovers on the main voice engine — it resets around 8am Nigeria time. The backup engine can make one now, with the same voice, but it reads Pidgin noticeably less naturally."
+        confirmLabel="Use the backup now"
+        cancelLabel="Wait for the morning"
+        onConfirm={() => {
+          setOfferBackupVoice(false);
+          handleGenerateAudio(true, lastPrelisten.current);
+        }}
+        onCancel={() => setOfferBackupVoice(false)}
+      />
 
       <ConfirmationModal
         isOpen={confirmLeave}

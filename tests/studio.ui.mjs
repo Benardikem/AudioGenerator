@@ -20,6 +20,7 @@ let browserDialogs = 0;
 page.on('pageerror', (e) => pageErrors.push(String(e)));
 page.on('dialog', async (d) => {
   browserDialogs++;
+  console.log('dialog:', d.type(), d.message().slice(0, 80));
   await d.dismiss();
 });
 
@@ -204,6 +205,61 @@ await page.getByRole('button', { name: /^Media$/ }).first().click();
 await page.waitForTimeout(1500);
 const media = await page.locator('table tbody').innerText().catch(() => '');
 check(/Regression run · scene 1/.test(media), 'the Media screen names the scene using a file');
+
+// When the main voice engine's daily allowance is gone, the studio asks before using the backup
+// — which reads Pidgin less naturally — rather than switching silently.
+const tinyWav = (() => {
+  const b = Buffer.alloc(44 + 1600);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + 1600, 4); b.write('WAVE', 8); b.write('fmt ', 12);
+  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24);
+  b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(1600, 40);
+  return 'data:audio/wav;base64,' + b.toString('base64');
+})();
+const voiceRequests = [];
+await page.route('**/api/generate-commercial-audio', async (route) => {
+  const body = JSON.parse(route.request().postData() || '{}');
+  voiceRequests.push(body);
+  if (!body.allowBackup) {
+    return route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ backupAvailable: true, error: 'used up' }) });
+  }
+  return route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ audioUrl: tinyWav, duration: 0.1, voice: 'Zephyr', style: 'storytime', script: 'x', usedBackupModel: true }),
+  });
+});
+await newAd('Voice engine', ['One line.', 'Two line.']);
+await page.locator('#generate-commercial-audio-btn').click();
+await page.waitForTimeout(1200);
+check(voiceRequests[0] && voiceRequests[0].allowBackup === false, 'a plain click never agrees to the backup engine');
+check((await page.locator("text=/Today's main voice is used up/").count()) > 0, 'running out of the main voice asks before using the backup');
+await page.getByRole('button', { name: /Use the backup now/i }).click();
+await page.waitForTimeout(1500);
+check(voiceRequests.length === 2 && voiceRequests[1].allowBackup === true, 'agreeing makes one request that allows the backup');
+await page.unroute('**/api/generate-commercial-audio');
+
+// A second voiceover on the script screen waits to be heard and chosen before it replaces the first
+await page.route('**/api/generate-commercial-audio', (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ audioUrl: tinyWav, duration: 7, voice: 'Zephyr', style: 'storytime', script: 'x' }),
+  })
+);
+const readyText = () => page.locator('text=/Voiceover Audio Ready/').first().textContent().catch(() => '');
+await page.locator('#generate-commercial-audio-btn').click();
+await page.waitForTimeout(1200);
+check((await page.locator('#prelisten-take audio').count()) === 1, 'a new take can be heard before it is used');
+check(/\(0s\)/.test(await readyText()), 'until chosen, the ad keeps its current voiceover');
+await page.getByRole('button', { name: /Keep the current voiceover/i }).click();
+await page.waitForTimeout(300);
+check((await page.locator('#prelisten-take').count()) === 0 && /\(0s\)/.test(await readyText()), 'keeping the current one throws the new take away');
+await page.locator('#generate-commercial-audio-btn').click();
+await page.waitForTimeout(1200);
+await page.getByRole('button', { name: /Use this voiceover/i }).click();
+await page.waitForTimeout(300);
+check(/\(7s\)/.test(await readyText()), 'choosing the new take puts it on the ad');
+await page.unroute('**/api/generate-commercial-audio');
 
 check(pageErrors.length === 0, `no errors in the page (${pageErrors.slice(0, 2).join(' | ')})`);
 

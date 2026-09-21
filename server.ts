@@ -174,7 +174,7 @@ app.get("/api/health", (_req, res) => {
 // Commercial audio generation using Gemini 3.1 Flash TTS
 app.post("/api/generate-commercial-audio", async (req, res) => {
   try {
-    const { script, voice = "Fenrir", style = "creator_pov", timbre = "baritone" } = req.body;
+    const { script, voice = "Fenrir", style = "creator_pov", timbre = "baritone", allowBackup = false } = req.body;
 
     if (!script || typeof script !== "string" || !script.trim()) {
       return res.status(400).json({ error: "Commercial script is required." });
@@ -234,9 +234,10 @@ app.post("/api/generate-commercial-audio", async (req, res) => {
       : "Fenrir";
 
     // On the free tier each voice model has its own small daily allowance (10 requests for
-    // gemini-3.1-flash-tts). When the preferred model's is used up, the older model still has
-    // its own, so use it rather than stop, and tell the person it happened: the voice can sound
-    // slightly different. Any other kind of failure is not retried.
+    // gemini-3.1-flash-tts). The older model still has its own, but it reads Pidgin and Nigerian
+    // delivery noticeably worse — the same voice name comes out flatter. So it is used only once
+    // the person has agreed to it; otherwise they are told and can wait for the morning reset.
+    // Any other kind of failure is not retried.
     let response: any;
     let usedModel = VOICE_MODELS[0];
     for (let i = 0; ; i++) {
@@ -258,7 +259,15 @@ app.post("/api/generate-commercial-audio", async (req, res) => {
       } catch (err: any) {
         const lastModel = i === VOICE_MODELS.length - 1;
         if (lastModel || !isDailyLimit(err)) throw err;
-        console.warn(`[voiceover] ${usedModel} daily limit reached, trying ${VOICE_MODELS[i + 1]}`);
+        if (!allowBackup) {
+          console.warn(`[voiceover] ${usedModel} daily limit reached; asking before using the backup`);
+          return res.status(429).json({
+            backupAvailable: true,
+            error:
+              "Today's 10 voiceovers on the main voice engine are used up. It resets around 8am Nigeria time.",
+          });
+        }
+        console.warn(`[voiceover] ${usedModel} daily limit reached, trying ${VOICE_MODELS[i + 1]} as agreed`);
       }
     }
 
