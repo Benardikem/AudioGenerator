@@ -78,8 +78,11 @@ export type OverlayPosition =
   | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
 export interface SceneOverlay {
-  /** 'debit_alert' is a bank notification; 'review_card' is a LegitAfrica review. */
-  kind: 'debit_alert' | 'review_card';
+  /**
+   * 'debit_alert' is a bank notification, 'review_card' a LegitAfrica review, 'page_card' the
+   * followers and testimonials of a vendor's page.
+   */
+  kind: 'debit_alert' | 'review_card' | 'page_card';
   /** Where the card sits in the frame. Default: middle-center. */
   position?: OverlayPosition;
   /** The small badge at the top, e.g. "BANK DEBIT ALERT" or "VERIFIED REVIEW". */

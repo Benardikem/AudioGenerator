@@ -1203,7 +1203,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       // SCENE OVERLAY CARD: a bank alert laid over the picture, in this advert's own words.
       // Slides up and fades in just after the scene starts, then stays put.
       // ----------------------------------------------------
-      if (activeScene?.overlay?.kind === 'debit_alert' || activeScene?.overlay?.kind === 'review_card') {
+      if (activeScene?.overlay?.kind) {
         const o = activeScene.overlay;
         const into = time - span.start;
         // It slides in while the advert plays. Paused — scrubbing, or judging a still frame — it is
@@ -1212,7 +1212,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         if (appear > 0) {
           const ease = 1 - Math.pow(1 - appear, 3);
           const cardW = 780;
-          const cardH = o.kind === 'review_card' ? 400 : 360;
+          const cardH = o.kind === 'review_card' ? 400 : o.kind === 'page_card' ? 320 : 360;
           const [vertical, horizontal] = (o.position ?? 'middle-center').split('-');
           const margin = 60;
           const cardX =
@@ -1244,7 +1244,48 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           ctx.stroke();
           ctx.restore();
 
-          if (o.kind === 'review_card') {
+          if (o.kind === 'page_card') {
+            // What a vendor's page claims for itself: the follower count and the glowing line
+            // that made it look safe. Drawn here because these are the numbers and words an
+            // image generator turns to mush.
+            ctx.fillStyle = BRAND_COLORS.sand;
+            ctx.beginPath();
+            ctx.arc(cardX + 90, cardY + 100, 50, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = BRAND_COLORS.gold;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            ctx.textAlign = 'left';
+            ctx.fillStyle = BRAND_COLORS.nearBlack;
+            ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillText((o.title || 'BRIDAL MAKEUP & GELE').slice(0, 26), cardX + 168, cardY + 92);
+
+            ctx.fillStyle = BRAND_COLORS.warmGrey;
+            ctx.font = '500 26px sans-serif';
+            ctx.fillText(o.line1 || '14.2k followers · 612 posts', cardX + 168, cardY + 134);
+
+            ctx.strokeStyle = BRAND_COLORS.borders;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cardX + 40, cardY + 186);
+            ctx.lineTo(cardX + cardW - 40, cardY + 186);
+            ctx.stroke();
+
+            const pageStars = Math.max(1, Math.min(5, Math.round(o.stars ?? 5)));
+            ctx.fillStyle = BRAND_COLORS.starGold;
+            ctx.font = '34px sans-serif';
+            ctx.fillText([0, 1, 2, 3, 4].map((i) => (i < pageStars ? '★' : '☆')).join(' '), cardX + 40, cardY + 240);
+
+            if (o.line2) {
+              ctx.fillStyle = BRAND_COLORS.nearBlack;
+              ctx.font = 'italic 600 30px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+              const said = wrapCanvasText(`“${o.line2}”`, cardW - 80)[0] || '';
+              ctx.fillText(said, cardX + 40, cardY + 290);
+            }
+
+            ctx.restore();
+          } else if (o.kind === 'review_card') {
             // A LegitAfrica review, in type the studio draws rather than letters an image
             // generator would misspell.
             const stars = Math.max(1, Math.min(5, Math.round(o.stars ?? 5)));

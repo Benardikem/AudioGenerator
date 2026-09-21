@@ -501,7 +501,77 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               >
                 Review card
               </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setOverlay(
+                    overlay?.kind === 'page_card'
+                      ? overlay
+                      : {
+                          kind: 'page_card',
+                          title: 'BRIDAL MAKEUP & GELE',
+                          line1: '14.2k followers · 612 posts',
+                          line2: 'Best gele in Lagos, no cap!',
+                          stars: 5,
+                        }
+                  )
+                }
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                  overlay?.kind === 'page_card'
+                    ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                    : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                }`}
+              >
+                Vendor page
+              </button>
             </div>
+
+            {overlay?.kind === 'page_card' && (
+              <div className="mt-2 space-y-1.5 bg-[#FBF8F1] p-2.5 rounded-2xl border border-[#E8A317]/40">
+                <input
+                  value={overlay.title ?? ''}
+                  onChange={(e) => setOverlay({ ...overlay, title: e.target.value })}
+                  maxLength={26}
+                  placeholder="What the page sells, e.g. BRIDAL MAKEUP & GELE"
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614] font-semibold"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={overlay.line1 ?? ''}
+                    onChange={(e) => setOverlay({ ...overlay, line1: e.target.value })}
+                    maxLength={40}
+                    placeholder="14.2k followers · 612 posts"
+                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                  />
+                  <div className="flex items-center gap-1 px-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                        onClick={() => setOverlay({ ...overlay, stars: n })}
+                        className={`text-lg leading-none cursor-pointer ${
+                          n <= (overlay.stars ?? 5) ? 'text-[#F5B301]' : 'text-[#DACFBE] hover:text-[#C6860C]'
+                        }`}
+                      >
+                        {n <= (overlay.stars ?? 5) ? '★' : '☆'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  value={overlay.line2 ?? ''}
+                  onChange={(e) => setOverlay({ ...overlay, line2: e.target.value })}
+                  maxLength={52}
+                  placeholder="A testimonial on the page, e.g. Best gele in Lagos!"
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                />
+                <p className="text-[11px] text-[#6B6256]">
+                  The followers and praise a page claims for itself. Invent the numbers and use no real
+                  handle or business name — this card is about to be shown as a fraud.
+                </p>
+              </div>
+            )}
 
             {overlay?.kind === 'review_card' && (
               <div className="mt-2 space-y-1.5 bg-[#FBF8F1] p-2.5 rounded-2xl border border-[#E8A317]/40">
