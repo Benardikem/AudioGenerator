@@ -49,6 +49,9 @@ const wordCount = (s?: string) =>
       return total + token.split('-').filter(Boolean).length;
     }, 0);
 
+/** A scene's share of the voiceover, in spoken words; even a very short line gets a moment. */
+export const sceneWeight = (line?: string) => Math.max(4, wordCount(line));
+
 export interface SceneSpan {
   start: number;
   end: number;
@@ -74,7 +77,7 @@ export function sceneTimeline(scenes: AdvertScene[], total: number): SceneSpan[]
   // scenes off the end of the advert.
   const squeeze = fixedTotal > total ? total / fixedTotal : 1;
 
-  const weights = scenes.map((s, i) => (fixed[i] === null ? Math.max(4, wordCount(s.voiceLine)) : 0));
+  const weights = scenes.map((s, i) => (fixed[i] === null ? sceneWeight(s.voiceLine) : 0));
   const weightTotal = weights.reduce((a, b) => a + b, 0);
   const free = Math.max(0, total - fixedTotal * squeeze);
 

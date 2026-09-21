@@ -1,5 +1,5 @@
 import { AdvertScene } from '../types';
-import { sceneTimeline } from './sceneTimeline';
+import { sceneWeight } from './sceneTimeline';
 
 /**
  * Times each scene to where its line is actually spoken in the voiceover.
@@ -65,6 +65,13 @@ export async function findPauses(audioUrl: string): Promise<{ duration: number; 
   return { duration: audio.duration, pauses };
 }
 
+/** A sentence ending inside a line is worth this many words of time — the pause after it. */
+const MID_LINE_STOP = 2;
+
+/** Full stops, question and exclamation marks that end a sentence before the line itself ends. */
+export const midLineStops = (line: string) =>
+  (line.trim().match(/[.?!]+["'”’)]*\s+\S/g) || []).length;
+
 /**
  * Picks the pauses to cut on, all at once rather than one join at a time.
  *
@@ -76,10 +83,12 @@ export async function findPauses(audioUrl: string): Promise<{ duration: number; 
  * length. Long silences are line breaks; the durations stop it drifting onto the wrong one.
  */
 export function pickCuts(scenes: AdvertScene[], duration: number, pauses: Pause[]): number[] {
-  const estimate = sceneTimeline(
-    scenes.map((s) => ({ ...s, lengthSeconds: undefined })),
-    duration
-  ).map((span) => span.end - span.start);
+  // The expected length of each scene. A full stop inside a line costs a pause of its own: on
+  // the wedding ad the narrator stopped as long after "Six a.m. for wedding morning." as between
+  // lines, and without allowing for it the matcher cut there and put nine scenes a line behind.
+  const weights = scenes.map((s) => sceneWeight(s.voiceLine) + MID_LINE_STOP * midLineStops(s.voiceLine));
+  const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+  const estimate = weights.map((w) => (w / totalWeight) * duration);
 
   const joins = scenes.length - 1;
   if (joins <= 0) return [];
