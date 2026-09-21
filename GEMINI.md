@@ -78,6 +78,9 @@ in production the server refuses to start without it.
   played in slow motion so nothing repeats), `loop` or `hold` (freeze on the last frame). The rule
   lives in `clipFrameAt` in `src/utils/sceneTimeline.ts`; keep it there rather than inlining timing
   maths in the canvas drawing.
+- "Match scenes to voiceover" (`src/utils/audioAlign.ts`) listens to the voiceover, finds the pause
+  before each line and sets every scene's `lengthSeconds` to where its line is really spoken. Word
+  counts only estimate; keep the alignment working from the audio itself.
 - A scene can hold for a set number of seconds (`lengthSeconds`) instead of taking a share of the
   voiceover by word count. Word counts only guess where words fall in the audio — a line said with
   pauses runs far longer — so this override must stay available; the rest of the voiceover is

@@ -26,6 +26,7 @@ import { AdvertScene } from '../types';
 import { BRAND_COLORS, ADVERT_SCENES } from '../data/advertScenes';
 import { EditSceneModal } from './EditSceneModal';
 import { ConfirmationModal } from './ConfirmationModal';
+import { alignScenesToVoiceover } from '../utils/audioAlign';
 
 interface StoryboardEditorProps {
   scenes: AdvertScene[];
@@ -41,6 +42,8 @@ interface StoryboardEditorProps {
   onGenerateScenesFromCurrentScript?: () => void;
   /** Voiceover length in seconds, used to time the scenes. */
   duration?: number;
+  /** The voiceover itself, so scenes can be timed to where each line is really spoken. */
+  audioUrl?: string;
 }
 
 export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
@@ -54,6 +57,7 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
   onGenerateAudio,
   isGeneratingAudio = false,
   onGenerateScenesFromCurrentScript,
+  audioUrl,
   duration = 32,
 }) => {
   const spans = sceneTimeline(scenes, duration);
@@ -92,6 +96,30 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
   };
 
   const [modalScene, setModalScene] = useState<AdvertScene | null>(null);
+  const [aligning, setAligning] = useState(false);
+  const [alignNotice, setAlignNotice] = useState<string | null>(null);
+
+  // Listens to the voiceover and starts each scene where its line is actually spoken, instead of
+  // where a word count guesses it will be.
+  const matchToVoiceover = async () => {
+    if (!audioUrl) return;
+    setAligning(true);
+    setAlignNotice(null);
+    try {
+      const result = await alignScenesToVoiceover(scenes, audioUrl);
+      replaceScenes(result.scenes);
+      setAlignNotice(
+        result.matched === result.joins
+          ? `Every scene now starts where its line is spoken (${result.joins} joins matched to pauses in the voiceover).`
+          : `${result.matched} of ${result.joins} joins matched to pauses in the voiceover. The rest are estimates — check them in the preview.`
+      );
+    } catch (err: any) {
+      setAlignNotice(err?.message || 'The voiceover could not be read.');
+    } finally {
+      setAligning(false);
+    }
+  };
+
   const [confirming, setConfirming] = useState<{
     title: string;
     message: string;
@@ -153,6 +181,23 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={!audioUrl || aligning}
+            onClick={() =>
+              setConfirming({
+                title: 'Match every scene to the voiceover?',
+                message: `The studio listens to the voiceover, finds the pause before each line, and sets all ${scenes.length} scenes to start there. Any lengths you set by hand are replaced.`,
+                confirmLabel: 'Match scenes',
+                onConfirm: matchToVoiceover,
+              })
+            }
+            title={audioUrl ? 'Time every scene to where its line is actually spoken' : 'Generate the voiceover first'}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#181614] hover:bg-black disabled:opacity-40 disabled:cursor-default text-white text-xs font-bold transition-all cursor-pointer"
+          >
+            <Clock className="w-3.5 h-3.5 text-[#E8A317]" />
+            <span>{aligning ? 'Listening to the voiceover…' : 'Match scenes to voiceover'}</span>
+          </button>
           {onGenerateScenesFromCurrentScript && (
             <button
               type="button"
@@ -198,6 +243,15 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {alignNotice && (
+        <div className="p-3.5 bg-[#FBF8F1] border-2 border-[#E8A317] text-[#181614] text-xs font-bold rounded-2xl flex items-center justify-between shadow-xs">
+          <span>{alignNotice}</span>
+          <button type="button" onClick={() => setAlignNotice(null)} className="text-[#6B6256] hover:text-[#181614] font-normal">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Sync Notification Notice */}
       {syncSuccess && (

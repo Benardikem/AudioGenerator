@@ -809,6 +809,7 @@ export default function App() {
               }}
               onUpdateScene={handleUpdateScenes}
               duration={activeCommercial?.duration || estimateDuration(script)}
+              audioUrl={activeCommercial?.audioUrl}
               onSyncToScript={(newScript) => setScript(newScript)}
               onResetScenes={() => handleUpdateScenes(ADVERT_SCENES)}
               onGenerateAudio={handleGenerateAudio}
