@@ -112,3 +112,15 @@ in production the server refuses to start without it.
   campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card, a WhatsApp chat) on top
   of every ad's photos. Do not add campaign-specific graphics back into the scene drawing; put them
   in a photo or a Text scene instead.
+
+## Checks — run them before every change goes live
+
+`sh tests/run.sh` runs every check the studio has: scene timing, clip fitting and voiceover
+matching in `tests/timing.test.ts`, and the app driven in a real browser in `tests/studio.ui.mjs`.
+Each browser check is something that broke once and was fixed. If one fails, the change being
+made has undone an earlier fix — do not delete or weaken the check to make it pass.
+
+- The "tell them" and "honest reviews" screens show a picture instead of themselves **only** when
+  it was uploaded or generated for the scene, or is a clip. Stock presets must be ignored there:
+  every scene starts out holding one, so counting them made those styles do nothing.
+
