@@ -523,23 +523,26 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
    * this, the picture simply stopped 570 pixels short of the bottom.
    */
   const designCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const getDesignCanvas = () => {
-    if (!designCanvasRef.current) {
+  const incomingCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const makeDesignSized = (ref: React.MutableRefObject<HTMLCanvasElement | null>) => {
+    if (!ref.current) {
       const c = document.createElement('canvas');
       c.width = VIDEO_CONFIG.width;
       c.height = VIDEO_CONFIG.height;
-      designCanvasRef.current = c;
+      ref.current = c;
     }
-    return designCanvasRef.current;
+    return ref.current;
   };
+  const getDesignCanvas = () => makeDesignSized(designCanvasRef);
+  /** The scene coming up, painted separately so it can be dissolved over the one going out. */
+  const getIncomingCanvas = () => makeDesignSized(incomingCanvasRef);
 
-  const drawSceneToCanvas = useCallback((timeToDraw: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const design = getDesignCanvas();
-    const ctx = design.getContext('2d');
-    if (!ctx) return;
-
+  /**
+   * Paints one moment of the advert at 1080x1350. Kept separate so a scene change can paint
+   * the outgoing scene and the incoming one and dissolve between them, instead of cutting
+   * hard from a picture at the end of its zoom to the next at the start of its own.
+   */
+  const paintScene = (ctx: CanvasRenderingContext2D, timeToDraw: number) => {
     const W = VIDEO_CONFIG.width; // 1080
     const H = VIDEO_CONFIG.height; // 1350
     const time = typeof timeToDraw === 'number' ? timeToDraw : currentTimeRef.current;
@@ -1535,6 +1538,42 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       ctx.fillRect(60, H - 24, W - 120, 8);
       ctx.fillStyle = BRAND_COLORS.gold;
       ctx.fillRect(60, H - 24, (W - 120) * progress, 8);
+
+  };
+
+  /** How long one scene dissolves into the next. */
+  const SCENE_DISSOLVE = 0.4;
+
+  const drawSceneToCanvas = useCallback((timeToDraw: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const design = getDesignCanvas();
+    const ctx = design.getContext('2d');
+    if (!ctx) return;
+
+    const W = VIDEO_CONFIG.width;
+    const H = VIDEO_CONFIG.height;
+    const time = typeof timeToDraw === 'number' ? timeToDraw : currentTimeRef.current;
+    const spansNow = spansRef.current;
+    const index = sceneIndexAt(spansNow, time);
+    const into = time - (spansNow[index]?.start ?? 0);
+
+    if (index > 0 && into < SCENE_DISSOLVE && isPlayingRef.current) {
+      // The scene just before this one, held on its last frame, with the new one coming up
+      // through it.
+      paintScene(ctx, (spansNow[index]?.start ?? 0) - 0.02);
+      const incoming = getIncomingCanvas();
+      const ictx = incoming.getContext('2d');
+      if (ictx) {
+        paintScene(ictx, time);
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, into / SCENE_DISSOLVE);
+        ctx.drawImage(incoming, 0, 0);
+        ctx.restore();
+      }
+    } else {
+      paintScene(ctx, time);
+    }
 
       // Place the composed advert into the frame that is showing. Taller frames get a blurred,
       // enlarged copy behind it rather than empty bands — the usual treatment for a 4:5 advert
