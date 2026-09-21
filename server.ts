@@ -642,7 +642,7 @@ app.post("/api/convert-to-mp4", (req, res) => {
         res.status(504).json({ error: "Video conversion timed out. Please try again." });
       }
       cleanup();
-    }, 180000);
+    }, 300000);
 
     ffmpeg.stderr.on("data", (chunk) => {
       stderrData += chunk.toString();

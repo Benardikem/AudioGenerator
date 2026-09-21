@@ -1567,9 +1567,12 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   // Convert WebM canvas capture to social-media-ready MP4 (H.264 / AAC)
   const convertBlobToMp4 = async (webmBlob: Blob): Promise<{ url: string; blob: Blob } | null> => {
     const controller = new AbortController();
+    // This covers sending the recording to the server as well as the conversion. A 9:16 advert is
+    // tens of megabytes, and at 65 seconds the browser was giving up mid-upload on any ordinary
+    // connection — the server only ever saw "client aborted upload stream".
     const abortTimeout = setTimeout(() => {
       controller.abort();
-    }, 65000);
+    }, 600000);
 
     let timerInterval: any = null;
     try {
@@ -1610,7 +1613,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       console.error('MP4 conversion error:', err);
       const isAbort = err.name === 'AbortError';
       const msg = isAbort
-        ? 'MP4 encoding took longer than expected. You can download the raw WebM file or click Retry MP4 below.'
+        ? 'The video took too long to reach the server — usually a slow connection. Download the WebM below, or press Retry MP4.'
         : err.message || 'Failed to convert to MP4';
       setMp4ConversionError(msg);
       return null;
