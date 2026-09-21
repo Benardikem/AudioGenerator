@@ -221,11 +221,21 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
   // Kept as a value so the artwork controls can be placed once, wherever they read best.
   const artworkSection =
-    sceneType === 'photo' || sceneType === 'end_card' || (sceneType === 'text' && textBackground === 'photo') ? (
+    sceneType === 'photo' ||
+    sceneType === 'end_card' ||
+    sceneType === 'logo' ||
+    sceneType === 'ui_review' ||
+    (sceneType === 'text' && textBackground === 'photo') ? (
             <div className="space-y-2">
               <label className="block text-xs font-bold text-[#181614]">
                 Scene Artwork / Background Image
               </label>
+              {(sceneType === 'logo' || sceneType === 'ui_review') && (
+                <p className="text-[11px] text-[#6B6256]">
+                  A photo here is shown <span className="font-semibold text-[#181614]">instead of</span> the
+                  LegitAfrica screen. Pick the Gold Kudu or Brand Lockup preset to get the screen back.
+                </p>
+              )}
 
               {/* What this scene shows, with the ways to change it beside it */}
               <div className="flex items-start gap-3">
