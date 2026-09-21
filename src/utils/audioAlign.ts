@@ -66,10 +66,14 @@ export async function findPauses(audioUrl: string): Promise<{ duration: number; 
 }
 
 /**
- * Picks, for each join between scenes, the pause that best fits: close to where the join is
- * expected, and long rather than short. Each join is expected a scene's estimated length after
- * the one before it — not at an absolute time — so an early error does not carry through the
- * rest of the advert.
+ * Picks the pauses to cut on, all at once rather than one join at a time.
+ *
+ * Choosing each cut as "the pause nearest where the word count expects it" failed on a real
+ * voiceover: a line read faster than its word count suggests put the estimate a couple of seconds
+ * late, and the matcher took a short breath inside the next line over the long pause that
+ * actually ended the scene. So instead every possible set of cuts is weighed together, and the
+ * winner is the one that cuts on the longest pauses while keeping each scene near its expected
+ * length. Long silences are line breaks; the durations stop it drifting onto the wrong one.
  */
 export function pickCuts(scenes: AdvertScene[], duration: number, pauses: Pause[]): number[] {
   const estimate = sceneTimeline(
@@ -77,33 +81,81 @@ export function pickCuts(scenes: AdvertScene[], duration: number, pauses: Pause[
     duration
   ).map((span) => span.end - span.start);
 
-  // An advert needs one cut per join, and line breaks give the longest pauses — so the longest
-  // few pauses are the line breaks, and a comma's short breath is only a fallback.
   const joins = scenes.length - 1;
-  const longest = [...pauses].sort((a, b) => b.length - a.length);
-  const lineBreak = (longest[Math.min(joins, longest.length) - 1]?.length ?? 0) * 0.7;
-  const breaks = pauses.filter((p) => p.length >= lineBreak);
+  if (joins <= 0) return [];
 
-  const nearest = (from: number, expected: number, reach: number, pool: Pause[]) => {
-    let best: Pause | null = null;
-    for (const p of pool) {
-      if (p.at <= from + 0.4 || Math.abs(p.at - expected) > reach) continue;
-      if (!best || Math.abs(p.at - expected) < Math.abs(best.at - expected)) best = p;
+  const candidates = [...pauses].filter((p) => p.at > 0.4 && p.at < duration - 0.4).sort((a, b) => a.at - b.at);
+  if (candidates.length < joins) return estimatedCuts(estimate, duration);
+
+  // How badly a scene of this length fits the one expected: a proportion, so a second off a
+  // two-second scene matters more than a second off a ten-second one.
+  const misfit = (length: number, expected: number) => Math.abs(length - expected) / Math.max(expected, 1);
+  const LENGTH_WEIGHT = 2; // per 100% off the expected length
+  const PAUSE_WEIGHT = 2; // per typical line break's worth of silence cut on
+  const MIN_SCENE = 0.4;
+
+  // Pauses are judged against this voiceover's own line breaks, not in absolute seconds: one
+  // narrator pauses half a second between lines, another two. The typical line break is the
+  // middle of the longest few pauses — there is roughly one per join.
+  const longest = [...candidates].sort((a, b) => b.length - a.length).slice(0, joins);
+  const typicalBreak = Math.max(0.1, longest[Math.floor(longest.length / 2)]?.length ?? 0.5);
+  const weight = (p: Pause) => p.length / typicalBreak;
+
+  const n = candidates.length;
+  // best[j][k]: lowest cost with join j placed on candidate k
+  const best: number[][] = Array.from({ length: joins }, () => new Array(n).fill(Infinity));
+  const from: number[][] = Array.from({ length: joins }, () => new Array(n).fill(-1));
+
+  for (let k = 0; k < n; k++) {
+    const length = candidates[k].at;
+    if (length < MIN_SCENE) continue;
+    best[0][k] = LENGTH_WEIGHT * misfit(length, estimate[0]) - PAUSE_WEIGHT * weight(candidates[k]);
+  }
+  for (let j = 1; j < joins; j++) {
+    for (let k = j; k < n; k++) {
+      for (let i = j - 1; i < k; i++) {
+        if (best[j - 1][i] === Infinity) continue;
+        const length = candidates[k].at - candidates[i].at;
+        if (length < MIN_SCENE) continue;
+        const cost = best[j - 1][i] + LENGTH_WEIGHT * misfit(length, estimate[j]) - PAUSE_WEIGHT * weight(candidates[k]);
+        if (cost < best[j][k]) {
+          best[j][k] = cost;
+          from[j][k] = i;
+        }
+      }
     }
-    return best;
-  };
+  }
 
+  // The last scene runs from the last cut to the end of the voiceover
+  let last = -1;
+  let lastCost = Infinity;
+  for (let k = 0; k < n; k++) {
+    if (best[joins - 1][k] === Infinity) continue;
+    const length = duration - candidates[k].at;
+    if (length < MIN_SCENE) continue;
+    const cost = best[joins - 1][k] + LENGTH_WEIGHT * misfit(length, estimate[joins]);
+    if (cost < lastCost) {
+      lastCost = cost;
+      last = k;
+    }
+  }
+  if (last < 0) return estimatedCuts(estimate, duration);
+
+  const chosen: number[] = [];
+  for (let j = joins - 1, k = last; j >= 0; j--) {
+    chosen.unshift(candidates[k].at);
+    k = from[j][k];
+  }
+  return chosen;
+}
+
+/** Cuts at the word-count estimate, for a voiceover with too few pauses to go on. */
+function estimatedCuts(estimate: number[], duration: number): number[] {
   const cuts: number[] = [];
-  let previous = 0;
-  for (let i = 0; i < joins; i++) {
-    const expected = previous + estimate[i];
-    const reach = Math.max(1.2, estimate[i] * 0.6);
-    const found = nearest(previous, expected, reach, breaks) ?? nearest(previous, expected, reach, pauses);
-    const cut = found
-      ? found.at
-      : Math.min(duration - 0.4 * (joins - i), Math.max(previous + 0.4, expected));
-    cuts.push(cut);
-    previous = cut;
+  let t = 0;
+  for (let i = 0; i < estimate.length - 1; i++) {
+    t += estimate[i];
+    cuts.push(Math.min(duration - 0.4 * (estimate.length - 1 - i), t));
   }
   return cuts;
 }
