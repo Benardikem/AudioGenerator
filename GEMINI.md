@@ -54,7 +54,9 @@ in production the server refuses to start without it.
   line. Do not reintroduce a fixed count of eight or equal-length scenes. The timing rules live in
   `src/utils/sceneTimeline.ts` and are used by the storyboard, the preview and the export.
 - A scene is drawn from its `type`, never from its position: `photo`, `text` (a fly-in headline
-  card with eyebrow, `*gold*` words, cream or photo background), and the LegitAfrica screens
+  card with eyebrow, `*gold*` words, cream or photo background), `text_side` (the same card, but
+  each row slides in from the left or right — `flyFrom` — one after another, spaced across the
+  spoken line; rows default to the line split at commas and dashes), and the LegitAfrica screens
   `logo`, `ui_search`, `ui_review`, `end_card`.
 - Ads saved before this change have no `layoutVersion` and were drawn by position. `normalizeScenes`
   converts them on opening so they still look the same. Do not remove it.

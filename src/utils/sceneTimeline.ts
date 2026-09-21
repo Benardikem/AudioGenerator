@@ -143,8 +143,16 @@ export function normalizeScenes(scenes: AdvertScene[]): AdvertScene[] {
   const byPosition = scenes.length === 8;
   return stampScenes(
     scenes.map((s, i) => {
-      if (!byPosition || s.type === 'text') return s;
+      if (!byPosition || s.type === 'text' || s.type === 'text_side') return s;
       return { ...s, type: (i < 4 ? 'photo' : BRAND_TYPES[i - 4]) as AdvertScene['type'] };
     })
   );
 }
+
+/** The spoken line broken into rows at its commas and dashes: "the alert, the date" → two rows. */
+export const sideRows = (line: string) =>
+  (line || '')
+    .split(/\s*[,;—–]\s*|\s+-\s+/)
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .join('\n');

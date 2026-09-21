@@ -19,6 +19,8 @@ const pageErrors = [];
 let browserDialogs = 0;
 page.on('pageerror', (e) => pageErrors.push(String(e)));
 page.on('dialog', async (d) => {
+  // The browser's own "leave with unsaved changes?" guard is wanted; the test just leaves.
+  if (d.type() === 'beforeunload') return d.accept();
   browserDialogs++;
   console.log('dialog:', d.type(), d.message().slice(0, 80));
   await d.dismiss();
@@ -260,6 +262,37 @@ await page.getByRole('button', { name: /Use this voiceover/i }).click();
 await page.waitForTimeout(300);
 check(/\(7s\)/.test(await readyText()), 'choosing the new take puts it on the ad');
 await page.unroute('**/api/generate-commercial-audio');
+
+// Side fly-in text: rows start from the spoken line and arrive one after another
+await newAd('Side fly-in', ['the deposit alert, the date, the blocking —', 'Second line here.']);
+await editScene(1);
+await page.getByRole('button', { name: 'Text (side fly-in)' }).click();
+await page.waitForTimeout(300);
+const rowsText = await page.getByPlaceholder('Type your headline here').inputValue().catch(() => '');
+check(rowsText === 'the deposit alert\nthe date\nthe blocking', 'side fly-in starts with one row per phrase of the line');
+await page.getByRole('button', { name: 'Right', exact: true }).click();
+await apply();
+await toPreview();
+const ink = () =>
+  page.evaluate(() => {
+    const c = document.querySelector('canvas');
+    const g = c.getContext('2d');
+    let dark = 0;
+    for (let x = 0.05; x < 0.95; x += 0.02)
+      for (let y = 0.15; y < 0.75; y += 0.02) {
+        const d = g.getImageData(Math.round(c.width * x), Math.round(c.height * y), 1, 1).data;
+        if (d[0] < 80 && d[1] < 80 && d[2] < 80) dark++;
+      }
+    return dark;
+  });
+await page.locator('text=/the deposit alert/').first().click();
+await page.waitForTimeout(800);
+const inkBefore = await ink();
+await playButton().click();
+// Wait until the scene has really played for a few seconds, however slowly playback starts
+for (let i = 0; i < 40 && (await readTime()) < 4; i++) await page.waitForTimeout(250);
+const inkAfter = await ink();
+check(inkBefore < 5 && inkAfter > 40, `side fly-in rows arrive while the scene plays (${inkBefore} → ${inkAfter})`);
 
 check(pageErrors.length === 0, `no errors in the page (${pageErrors.slice(0, 2).join(' | ')})`);
 

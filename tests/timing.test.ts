@@ -2,7 +2,7 @@
  * Scene timing, clip fitting and voiceover matching — the rules every scene's length and every
  * cut depend on. Run with the rest of the checks: sh tests/run.sh
  */
-import { sceneTimeline, clipFrameAt } from '../src/utils/sceneTimeline';
+import { sceneTimeline, clipFrameAt, sideRows } from '../src/utils/sceneTimeline';
 import { pickCuts } from '../src/utils/audioAlign';
 import { VOICE_OPTIONS } from '../src/components/VoiceSelector';
 import { VOICE_NAMES } from '../voiceNames';
@@ -54,6 +54,9 @@ check(bare.length === 2 && bare[0] < bare[1] && bare[1] < 20, 'with no pauses it
 // Every voice offered is one the server will use — otherwise it silently speaks as Fenrir
 const blocked = VOICE_OPTIONS.map((v) => v.id.replace('_Baritone', '').replace('_Bass', '')).filter((id) => !VOICE_NAMES.includes(id));
 check(blocked.length === 0, `every voice on screen is allowed by the server (${blocked.join(', ')})`);
+
+// Side fly-in rows start from the spoken line, one row per phrase
+check(sideRows('the deposit alert, the date, the blocking —') === 'the deposit alert\nthe date\nthe blocking', 'a line splits into one row per phrase at commas and dashes');
 
 console.log(fails.length ? `\n${fails.length} FAILED` : '\ntiming: all checks passed');
 process.exit(fails.length ? 1 : 0);

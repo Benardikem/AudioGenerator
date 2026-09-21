@@ -105,13 +105,15 @@ export interface AdvertScene {
   voiceLine: string;
   visualPrompt: string;
   imageSrc?: string;
-  type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card' | 'text';
-  /** type 'text': small uppercase label that fades in above the headline. */
+  type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card' | 'text' | 'text_side';
+  /** type 'text' and 'text_side': small uppercase label that fades in above the headline. */
   eyebrow?: string;
-  /** type 'text': one row per line; wrap words in *stars* to make them gold. */
+  /** type 'text' and 'text_side': one row per line; wrap words in *stars* to make them gold. */
   headline?: string;
   /** type 'text': plain cream background (default), or the scene photo darkened behind the text. */
   textBackground?: 'cream' | 'photo';
+  /** type 'text_side': the side each row flies in from. Default: alternate, left first. */
+  flyFrom?: 'left' | 'right' | 'alternate';
   /** A video clip that plays as this scene's background instead of imageSrc. */
   videoSrc?: string;
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */

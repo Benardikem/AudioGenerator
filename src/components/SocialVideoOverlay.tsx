@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { sceneTimeline, sceneIndexAt, isBrandType, clipFrameAt, ClipFit } from '../utils/sceneTimeline';
+import { sceneTimeline, sceneIndexAt, isBrandType, clipFrameAt, ClipFit, sideRows } from '../utils/sceneTimeline';
 
 /** The star row for a scene's rating: filled stars up to the rating, hollow ones after it. */
 const starRow = (rating?: number) => {
@@ -678,6 +678,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         const sceneDur = span.end - span.start;
         const t = sceneProgress * sceneDur; // seconds into this scene
         const onPhoto = activeScene.textBackground === 'photo';
+        // text_side: each row slides in from the side, spaced across the spoken line so every
+        // phrase lands about when it is said, instead of all rising at once.
+        const sideways = activeScene.type === 'text_side';
         const FONT = '-apple-system, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif';
         const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
         const easeOut = (v: number) => 1 - Math.pow(1 - clamp01(v), 4);
@@ -704,7 +707,10 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         const gold = onPhoto ? BRAND_COLORS.gold : BRAND_COLORS.darkerGold;
 
         // Words carry a gold flag; *stars* may span several words.
-        const source = (activeScene.headline || activeScene.voiceLine || '').split('\n').map((l) => l.trim()).filter(Boolean);
+        const source = (activeScene.headline || (sideways ? sideRows(activeScene.voiceLine) : activeScene.voiceLine) || '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
         const rows = source.map((line) => {
           const words: { text: string; gold: boolean }[] = [];
           for (const seg of line.split(/(\*[^*]+\*)/).filter(Boolean)) {
@@ -719,22 +725,24 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         const maxW = W - padX * 2;
         let size = 112;
         let lines: { text: string; gold: boolean }[][] = [];
+        let lineRow: number[] = [];
         for (; size >= 52; size -= 4) {
           ctx.font = `800 ${size}px ${FONT}`;
           setSpacing(-0.035, size);
           const space = ctx.measureText(' ').width;
           lines = [];
-          for (const words of rows) {
+          lineRow = [];
+          rows.forEach((words, row) => {
             let cur: typeof words = [];
             let curW = 0;
             for (const w of words) {
               const ww = ctx.measureText(w.text).width;
-              if (cur.length && curW + space + ww > maxW) { lines.push(cur); cur = []; curW = 0; }
+              if (cur.length && curW + space + ww > maxW) { lines.push(cur); lineRow.push(row); cur = []; curW = 0; }
               curW += (cur.length ? space : 0) + ww;
               cur.push(w);
             }
-            if (cur.length) lines.push(cur);
-          }
+            if (cur.length) { lines.push(cur); lineRow.push(row); }
+          });
           if (lines.length * size * 1.06 <= H * 0.52 && lines.length <= 6) break;
         }
         const lineH = size * 1.06;
@@ -756,8 +764,38 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           y += eyebrowH;
         }
 
+        // Sideways rows: when each arrives, and from which side.
+        const rowGap = rows.length > 1 ? Math.max(0.3, Math.min(1.2, (sceneDur * 0.8 - 0.3) / rows.length)) : 0;
+        const rowDelay = (row: number) => 0.2 + row * rowGap;
+        const fromLeft = (row: number) =>
+          activeScene.flyFrom === 'left' ? true : activeScene.flyFrom === 'right' ? false : row % 2 === 0;
+        const lastLanded = sideways ? rowDelay(rows.length - 1) + 0.55 : 0.35 + lines.length * 0.14 + 0.45;
+
         ctx.textAlign = 'left';
-        lines.forEach((words, i) => {
+        if (sideways) {
+          lines.forEach((words, i) => {
+            const row = lineRow[i];
+            const raw = clamp01((t - rowDelay(row)) / 0.55);
+            if (raw <= 0) return;
+            // A little overshoot, so each row lands with a snap rather than a glide.
+            const c = 1.4;
+            const p = 1 + (c + 1) * Math.pow(raw - 1, 3) + c * Math.pow(raw - 1, 2);
+            const offset = (1 - p) * (W + 60) * (fromLeft(row) ? -1 : 1);
+            ctx.save();
+            ctx.globalAlpha = clamp01(raw * 3);
+            ctx.font = `800 ${size}px ${FONT}`;
+            setSpacing(-0.035, size);
+            const space = ctx.measureText(' ').width;
+            let x = padX + offset;
+            const baseline = y + i * lineH + size * 0.9;
+            for (const w of words) {
+              ctx.fillStyle = w.gold ? gold : ink;
+              ctx.fillText(w.text, x, baseline);
+              x += ctx.measureText(w.text).width + space;
+            }
+            ctx.restore();
+          });
+        } else lines.forEach((words, i) => {
           const delay = 0.35 + i * 0.14;
           const p = easeOut((t - delay) / 0.78);
           const top = y + i * lineH;
@@ -779,7 +817,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         });
 
         // Gold rule that draws in once the last line has landed.
-        const barP = easeOut((t - (0.35 + lines.length * 0.14 + 0.45)) / 0.6);
+        const barP = easeOut((t - lastLanded) / 0.6);
         if (barP > 0) {
           ctx.fillStyle = BRAND_COLORS.gold;
           ctx.beginPath();
@@ -789,7 +827,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         if ('letterSpacing' in ctx) (ctx as any).letterSpacing = '0px';
       };
 
-      if (activeScene?.type === 'text') {
+      if (activeScene?.type === 'text' || activeScene?.type === 'text_side') {
         drawFlyInText();
       }
 

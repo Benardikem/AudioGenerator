@@ -15,6 +15,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { AdvertScene, SceneOverlay, OverlayPosition } from '../types';
+import { sideRows } from '../utils/sceneTimeline';
 
 interface EditSceneModalProps {
   isOpen: boolean;
@@ -55,6 +56,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [eyebrow, setEyebrow] = useState('');
   const [headline, setHeadline] = useState('');
   const [textBackground, setTextBackground] = useState<'cream' | 'photo'>('cream');
+  const [flyFrom, setFlyFrom] = useState<'left' | 'right' | 'alternate'>('alternate');
   const [videoSrc, setVideoSrc] = useState('');
   const [clipUploading, setClipUploading] = useState(false);
   const [clipError, setClipError] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setEyebrow(scene.eyebrow || '');
       setHeadline(scene.headline || '');
       setTextBackground(scene.textBackground || 'cream');
+      setFlyFrom(scene.flyFrom || 'alternate');
       setVideoSrc(scene.videoSrc || '');
       setClipFit(scene.clipFit || 'slow');
       setLengthSeconds(scene.lengthSeconds ? String(scene.lengthSeconds) : '');
@@ -199,6 +202,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     }
   };
 
+  const isTextStyle = sceneType === 'text' || sceneType === 'text_side';
+
   const handleSave = () => {
     onSave({
       ...scene,
@@ -217,7 +222,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       rating: (sceneType === 'ui_search' || sceneType === 'ui_review') && rating !== 5 ? rating : undefined,
       motion: motion !== 'zoom-in' ? motion : undefined,
       type: sceneType,
-      ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
+      ...(isTextStyle ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
+      flyFrom: sceneType === 'text_side' && flyFrom !== 'alternate' ? flyFrom : undefined,
     });
     onClose();
   };
@@ -228,7 +234,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     sceneType === 'end_card' ||
     sceneType === 'logo' ||
     sceneType === 'ui_review' ||
-    (sceneType === 'text' && textBackground === 'photo') ? (
+    (isTextStyle && textBackground === 'photo') ? (
             <div className="space-y-2">
               <label className="block text-xs font-bold text-[#181614]">
                 Scene Artwork / Background Image
@@ -452,6 +458,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               {([
                 { id: 'photo', label: 'Photo' },
                 { id: 'text', label: 'Text (fly-in)' },
+                { id: 'text_side', label: 'Text (side fly-in)' },
                 { id: 'logo', label: 'LegitAfrica: tell them' },
                 { id: 'ui_search', label: 'LegitAfrica: search & review' },
                 { id: 'ui_review', label: 'LegitAfrica: honest reviews' },
@@ -460,7 +467,11 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setSceneType(opt.id)}
+                  onClick={() => {
+                    setSceneType(opt.id);
+                    // Start the rows off from the spoken line, split at its commas and dashes.
+                    if (opt.id === 'text_side' && !headline.trim()) setHeadline(sideRows(voiceLine));
+                  }}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                     sceneType === opt.id
                       ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
@@ -788,7 +799,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           </div>
 
           <div className="space-y-3">
-          {(sceneType === 'photo' || sceneType === 'end_card' || (sceneType === 'text' && textBackground === 'photo')) && (
+          {(sceneType === 'photo' || sceneType === 'end_card' || (isTextStyle && textBackground === 'photo')) && (
             <div className="space-y-1.5">
               <button
                 type="button"
@@ -935,7 +946,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
           {/* The fly-in text fields live in this column: in the left one they made the editor
               twice as tall as the right side, which was sitting empty. */}
-          {sceneType === 'text' && (
+          {isTextStyle && (
             <div className="bg-[#FBF8F1] p-3.5 rounded-2xl border border-[#E8A317]/40 space-y-3">
               <div>
                 <label className="block text-xs font-bold text-[#181614] mb-1">Small label (optional)</label>
@@ -957,7 +968,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   className="w-full p-3 text-sm bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614] font-semibold"
                 />
                 <p className="text-[11px] text-[#6B6256] mt-1 leading-snug">
-                  One row per line, each flying in after the one before.{' '}
+                  One row per line, each flying in after the one before{sceneType === 'text_side' ? ', spaced across the spoken line' : ''}.{' '}
                   <span className="font-mono font-semibold text-[#181614]">*stars*</span> make a word gold:{' '}
                   <span className="font-mono text-[#181614]">
                     <span className="text-[#C6860C]">*Gone*</span> in one Saturday.
@@ -983,6 +994,31 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   ))}
                 </div>
               </div>
+              {sceneType === 'text_side' && (
+                <div>
+                  <label className="block text-xs font-bold text-[#181614] mb-1">Rows fly in from</label>
+                  <div className="flex gap-2">
+                    {([
+                      ['alternate', 'Left, then right'],
+                      ['left', 'Left'],
+                      ['right', 'Right'],
+                    ] as const).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setFlyFrom(id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          flyFrom === id
+                            ? 'bg-[#181614] border-[#181614] text-white'
+                            : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
