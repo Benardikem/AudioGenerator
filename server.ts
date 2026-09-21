@@ -11,6 +11,7 @@ import { installCommercialsApi } from "./commercialsStore";
 import { installSceneVideosApi } from "./sceneVideos";
 import { installMediaApi } from "./mediaApi";
 import { storeImage } from "./commercialsStore";
+import { VOICE_NAMES } from "./voiceNames";
 
 /** Keep in step with MAX_SCENES in src/utils/sceneTimeline.ts. */
 const MAX_SCENES = 24;
@@ -229,7 +230,7 @@ app.post("/api/generate-commercial-audio", async (req, res) => {
 
     const promptText = `${vocalTimbreDirection}${styleDirection}\n\n${script.trim()}`;
 
-    const validVoice = ["Fenrir", "Charon", "Puck", "Kore", "Zephyr", "Aoede"].includes(voice)
+    const validVoice = VOICE_NAMES.includes(voice)
       ? voice
       : "Fenrir";
 

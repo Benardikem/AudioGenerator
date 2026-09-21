@@ -4,6 +4,8 @@
  */
 import { sceneTimeline, clipFrameAt } from '../src/utils/sceneTimeline';
 import { pickCuts } from '../src/utils/audioAlign';
+import { VOICE_OPTIONS } from '../src/components/VoiceSelector';
+import { VOICE_NAMES } from '../voiceNames';
 
 const fails: string[] = [];
 const check = (ok: boolean, what: string) => {
@@ -48,6 +50,10 @@ const wedding = pickCuts(
 check(near(wedding[0], 6.2, 0.01), 'a long line break beats a short breath the word count expects');
 const bare = pickCuts([sc(8), sc(8), sc(8)], 20, []);
 check(bare.length === 2 && bare[0] < bare[1] && bare[1] < 20, 'with no pauses it falls back to an ordered estimate');
+
+// Every voice offered is one the server will use — otherwise it silently speaks as Fenrir
+const blocked = VOICE_OPTIONS.map((v) => v.id.replace('_Baritone', '').replace('_Bass', '')).filter((id) => !VOICE_NAMES.includes(id));
+check(blocked.length === 0, `every voice on screen is allowed by the server (${blocked.join(', ')})`);
 
 console.log(fails.length ? `\n${fails.length} FAILED` : '\ntiming: all checks passed');
 process.exit(fails.length ? 1 : 0);
