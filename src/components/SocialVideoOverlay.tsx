@@ -1195,7 +1195,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       // SCENE OVERLAY CARD: a bank alert laid over the picture, in this advert's own words.
       // Slides up and fades in just after the scene starts, then stays put.
       // ----------------------------------------------------
-      if (activeScene?.overlay?.kind === 'debit_alert') {
+      if (activeScene?.overlay?.kind === 'debit_alert' || activeScene?.overlay?.kind === 'review_card') {
         const o = activeScene.overlay;
         const into = time - span.start;
         // It slides in while the advert plays. Paused — scrubbing, or judging a still frame — it is
@@ -1204,7 +1204,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         if (appear > 0) {
           const ease = 1 - Math.pow(1 - appear, 3);
           const cardW = 780;
-          const cardH = 360;
+          const cardH = o.kind === 'review_card' ? 400 : 360;
           const [vertical, horizontal] = (o.position ?? 'middle-center').split('-');
           const margin = 60;
           const cardX =
@@ -1236,6 +1236,61 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           ctx.stroke();
           ctx.restore();
 
+          if (o.kind === 'review_card') {
+            // A LegitAfrica review, in type the studio draws rather than letters an image
+            // generator would misspell.
+            const stars = Math.max(1, Math.min(5, Math.round(o.stars ?? 5)));
+            ctx.fillStyle = BRAND_COLORS.starGold;
+            ctx.font = '44px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText([0, 1, 2, 3, 4].map((i) => (i < stars ? '★' : '☆')).join(' '), cardX + 40, cardY + 84);
+
+            const eyebrow = (o.title || 'VERIFIED REVIEW').toUpperCase();
+            ctx.fillStyle = BRAND_COLORS.warmGrey;
+            ctx.font = 'bold 20px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(eyebrow, cardX + cardW - 40, cardY + 78);
+
+            // The review itself, shrunk to fit rather than spilling off the card
+            const quote = o.line1 || 'Dem collect money, no house.';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = BRAND_COLORS.nearBlack;
+            let quoteSize = 44;
+            let quoteLines: string[] = [];
+            do {
+              ctx.font = `600 ${quoteSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+              quoteLines = wrapCanvasText(`"${quote}"`, cardW - 80);
+              if (quoteLines.length <= 3) break;
+              quoteSize -= 4;
+            } while (quoteSize > 26);
+            quoteLines.slice(0, 3).forEach((line, i) => {
+              ctx.fillText(line, cardX + 40, cardY + 150 + i * (quoteSize + 10));
+            });
+
+            if (o.line2) {
+              ctx.fillStyle = BRAND_COLORS.warmGrey;
+              ctx.font = '500 24px sans-serif';
+              ctx.fillText(o.line2, cardX + 40, cardY + cardH - 92);
+            }
+
+            ctx.strokeStyle = BRAND_COLORS.borders;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(cardX + 40, cardY + cardH - 70);
+            ctx.lineTo(cardX + cardW - 40, cardY + cardH - 70);
+            ctx.stroke();
+
+            ctx.fillStyle = BRAND_COLORS.gold;
+            ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('legitafrica.com', cardX + 40, cardY + cardH - 26);
+
+            const kuduMark = preloadedImages.current.get('/brand/legitafrica-icon-transparent.png');
+            if (kuduMark && kuduMark.complete && kuduMark.naturalWidth) {
+              ctx.drawImage(kuduMark, cardX + cardW - 90, cardY + cardH - 62, 50, 50);
+            }
+
+            ctx.restore();
+          } else {
           const title = (o.title || 'BANK DEBIT ALERT').toUpperCase();
           ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
           const badgeW = Math.min(cardW - 160, ctx.measureText(title).width + 40);
@@ -1272,6 +1327,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           ctx.textAlign = 'center';
           ctx.fillText('✓', cardX + cardW - 70, cardY + 78);
           ctx.restore();
+          }
         }
       }
 

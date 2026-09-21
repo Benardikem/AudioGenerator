@@ -468,7 +468,77 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               >
                 Debit alert
               </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setOverlay(
+                    overlay?.kind === 'review_card'
+                      ? overlay
+                      : {
+                          kind: 'review_card',
+                          title: 'VERIFIED REVIEW',
+                          line1: 'Dem collect money, no house.',
+                          line2: 'Posted by a tenant in Lagos',
+                          stars: 1,
+                        }
+                  )
+                }
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+                  overlay?.kind === 'review_card'
+                    ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                    : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                }`}
+              >
+                Review card
+              </button>
             </div>
+
+            {overlay?.kind === 'review_card' && (
+              <div className="mt-2 space-y-1.5 bg-[#FBF8F1] p-2.5 rounded-2xl border border-[#E8A317]/40">
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={overlay.title ?? ''}
+                    onChange={(e) => setOverlay({ ...overlay, title: e.target.value })}
+                    maxLength={22}
+                    placeholder="VERIFIED REVIEW"
+                    className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                  />
+                  <div className="flex items-center gap-1 px-2">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                        onClick={() => setOverlay({ ...overlay, stars: n })}
+                        className={`text-lg leading-none cursor-pointer ${
+                          n <= (overlay.stars ?? 5) ? 'text-[#F5B301]' : 'text-[#DACFBE] hover:text-[#C6860C]'
+                        }`}
+                      >
+                        {n <= (overlay.stars ?? 5) ? '★' : '☆'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  value={overlay.line1 ?? ''}
+                  onChange={(e) => setOverlay({ ...overlay, line1: e.target.value })}
+                  maxLength={90}
+                  placeholder="The review, e.g. Dem collect money, no house."
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614] font-semibold"
+                />
+                <input
+                  value={overlay.line2 ?? ''}
+                  onChange={(e) => setOverlay({ ...overlay, line2: e.target.value })}
+                  maxLength={44}
+                  placeholder="Who left it, e.g. Posted by a tenant in Lagos"
+                  className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                />
+                <p className="text-[11px] text-[#6B6256]">
+                  Drawn in proper type over the picture, with legitafrica.com along the bottom. Name no
+                  business here — a low rating beside a real name is defamation.
+                </p>
+              </div>
+            )}
 
             {overlay?.kind === 'debit_alert' && (
               <div className="mt-2 space-y-1.5 bg-[#FBF8F1] p-2.5 rounded-2xl border border-[#E8A317]/40">
@@ -504,38 +574,40 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
                   />
                 </div>
-                {/* Where it sits, as a 3x3 of the frame */}
-                <div className="flex items-center gap-3">
-                  <div className="grid grid-cols-3 gap-1">
-                    {(['top-left', 'top-center', 'top-right',
-                       'middle-left', 'middle-center', 'middle-right',
-                       'bottom-left', 'bottom-center', 'bottom-right'] as OverlayPosition[]).map((pos) => {
-                      const active = (overlay.position ?? 'middle-center') === pos;
-                      return (
-                        <button
-                          key={pos}
-                          type="button"
-                          title={pos.replace('-', ' ')}
-                          aria-label={pos.replace('-', ' ')}
-                          onClick={() => setOverlay({ ...overlay, position: pos })}
-                          className={`w-6 h-5 rounded-md border transition-colors cursor-pointer ${
-                            active ? 'bg-[#E8A317] border-[#E8A317]' : 'bg-white border-[#EAE3D4] hover:bg-[#F4EEE2]'
-                          }`}
-                        >
-                          <span className={`block w-1.5 h-1.5 rounded-full mx-auto ${active ? 'bg-[#181614]' : 'bg-[#DACFBE]'}`} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[11px] text-[#6B6256] flex-1">
-                    Where the card sits in the frame — currently{' '}
-                    <span className="font-semibold text-[#181614]">
-                      {(overlay.position ?? 'middle-center').replace('-', ' ')}
-                    </span>
-                    . It slides up as the scene starts.
-                  </p>
-                </div>
               </div>
+            )}
+            {/* Where the card sits, as a 3x3 of the frame */}
+            {overlay && (
+                  <div className="flex items-center gap-3">
+                    <div className="grid grid-cols-3 gap-1">
+                      {(['top-left', 'top-center', 'top-right',
+                         'middle-left', 'middle-center', 'middle-right',
+                         'bottom-left', 'bottom-center', 'bottom-right'] as OverlayPosition[]).map((pos) => {
+                        const active = (overlay.position ?? 'middle-center') === pos;
+                        return (
+                          <button
+                            key={pos}
+                            type="button"
+                            title={pos.replace('-', ' ')}
+                            aria-label={pos.replace('-', ' ')}
+                            onClick={() => setOverlay({ ...overlay, position: pos })}
+                            className={`w-6 h-5 rounded-md border transition-colors cursor-pointer ${
+                              active ? 'bg-[#E8A317] border-[#E8A317]' : 'bg-white border-[#EAE3D4] hover:bg-[#F4EEE2]'
+                            }`}
+                          >
+                            <span className={`block w-1.5 h-1.5 rounded-full mx-auto ${active ? 'bg-[#181614]' : 'bg-[#DACFBE]'}`} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[11px] text-[#6B6256] flex-1">
+                      Where the card sits in the frame — currently{' '}
+                      <span className="font-semibold text-[#181614]">
+                        {(overlay.position ?? 'middle-center').replace('-', ' ')}
+                      </span>
+                      . It slides up as the scene starts.
+                    </p>
+                  </div>
             )}
           </div>
 

@@ -78,16 +78,19 @@ export type OverlayPosition =
   | 'bottom-left' | 'bottom-center' | 'bottom-right';
 
 export interface SceneOverlay {
-  kind: 'debit_alert';
+  /** 'debit_alert' is a bank notification; 'review_card' is a LegitAfrica review. */
+  kind: 'debit_alert' | 'review_card';
   /** Where the card sits in the frame. Default: middle-center. */
   position?: OverlayPosition;
-  /** The small badge at the top, e.g. "BANK DEBIT ALERT". */
+  /** The small badge at the top, e.g. "BANK DEBIT ALERT" or "VERIFIED REVIEW". */
   title?: string;
-  /** The big line, e.g. "₦300,000.00". */
+  /** Bank alert only: the big line, e.g. "₦300,000.00". */
   amount?: string;
-  /** Two smaller lines under the amount. */
+  /** Bank alert: two detail lines. Review card: the review itself, then who left it. */
   line1?: string;
   line2?: string;
+  /** Review card only: stars shown, 1 to 5. Default 5. */
+  stars?: number;
 }
 
 export interface AdvertScene {

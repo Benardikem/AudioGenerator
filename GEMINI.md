@@ -97,8 +97,10 @@ in production the server refuses to start without it.
   per advert and saved with it as `bgm`. The two built-in beds are generated in the browser, so the
   export plays them into its own audio context — do not wire them to the speakers only, or the
   exported video comes out silent underneath the voice.
-- A scene can carry an `overlay` card drawn over its picture — currently `debit_alert`, whose
-  title, amount and two lines are typed by the user in the scene editor. This is how a campaign
+- A scene can carry an `overlay` card drawn over its picture — `debit_alert` (a bank notification)
+  or `review_card` (a LegitAfrica review with stars and legitafrica.com), whose words are typed by
+  the user in the scene editor. The review card exists because image generators misspell
+  "legitafrica.com"; the studio draws it in real type instead. This is how a campaign
   gets a graphic like a bank alert: as this scene's own words, editable, never hard-coded.
 - Photo scenes draw only the scene's own photo. They used to draw fixed graphics from the first
   campaign (a ₦45,000 debit alert, a named tailor shop, a vendor call card, a WhatsApp chat) on top
