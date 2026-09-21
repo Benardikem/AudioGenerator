@@ -1623,6 +1623,15 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       externalSceneIndex >= 0 &&
       externalSceneIndex < sceneList.length
     ) {
+      // While the advert plays, this component reports each new scene to the parent, which hands
+      // the same number straight back as a prop. Acting on that would seek the voiceover back to
+      // the top of the scene it has only just entered — you would hear the last word repeat and
+      // see the picture jump. Our own report is not a request to jump.
+      if (isPlayingRef.current && externalSceneIndex === lastNotifiedSceneRef.current) {
+        lastExternalSceneRef.current = externalSceneIndex;
+        return;
+      }
+
       lastExternalSceneRef.current = externalSceneIndex;
       lastNotifiedSceneRef.current = externalSceneIndex;
       const targetTime = (spansRef.current[externalSceneIndex]?.start ?? 0) + 0.05;
