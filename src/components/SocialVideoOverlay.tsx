@@ -225,6 +225,14 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     return video;
   };
 
+  /** A 'logo' or 'ui_review' scene given its own photo shows that photo instead of the screen. */
+  const showsOwnPhoto = (scene: AdvertScene | undefined) =>
+    !!scene &&
+    (scene.type === 'logo' || scene.type === 'ui_review') &&
+    !!scene.imageSrc &&
+    scene.imageSrc !== '/brand/logo-clean.png' &&
+    scene.imageSrc !== '/brand/legitafrica-icon-transparent.png';
+
   const videoReady = (video: HTMLVideoElement | null): video is HTMLVideoElement =>
     !!video && video.readyState >= 2 && video.videoWidth > 0;
 
@@ -717,7 +725,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       // chat) over whatever photo was chosen, so every ad looked like that one. Now each is the
       // photo alone, with a slow zoom and shading that keeps the watermark and captions readable.
       // ----------------------------------------------------
-      else if (!isBrandType(activeScene.type)) {
+      else if (!isBrandType(activeScene.type) || showsOwnPhoto(activeScene)) {
         const fallbacks = ['/scenes/scene1.jpg', '/scenes/scene2.jpg', '/scenes/scene3_v2.jpg', '/scenes/scene4.jpg'];
         const img = getSceneImage(activeScene, fallbacks[currentSceneIndex % fallbacks.length]);
         if (videoReady(activeVideo)) {
@@ -748,20 +756,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         // Strict Brand Main Background: Cream #FBF8F1
         ctx.fillStyle = BRAND_COLORS.cream;
         ctx.fillRect(0, 0, W, H);
-
-        // Check if user uploaded a custom image for Scene 5
-        const isCustomImg =
-          activeScene.imageSrc &&
-          activeScene.imageSrc !== '/brand/logo-clean.png' &&
-          activeScene.imageSrc !== '/brand/legitafrica-icon-transparent.png';
-
-        if (isCustomImg) {
-          const custom = getSceneImage(activeScene, '/brand/logo-clean.png');
-          if (custom && custom.complete && custom.naturalWidth > 0) {
-            drawCoverImage(custom, 1.0);
-            return;
-          }
-        }
 
         // Elegant warm ambient glow behind central lockup
         const aura = ctx.createRadialGradient(W / 2, 540, 50, W / 2, 540, 480);
@@ -925,19 +919,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         ctx.fillRect(0, 0, W, H);
 
         // Check if user provided an uploaded custom image for Scene 7
-        const isCustomImg =
-          activeScene.imageSrc &&
-          activeScene.imageSrc !== '/brand/logo-clean.png' &&
-          activeScene.imageSrc !== '/brand/legitafrica-icon-transparent.png';
-
-        if (isCustomImg) {
-          const custom = getSceneImage(activeScene, '/brand/legitafrica-icon-transparent.png');
-          if (custom && custom.complete && custom.naturalWidth > 0) {
-            drawCoverImage(custom, 1.0);
-            return;
-          }
-        }
-
         // Subtle ambient radial glow behind central card
         const glow = ctx.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, 500);
         glow.addColorStop(0, 'rgba(232, 163, 23, 0.08)');

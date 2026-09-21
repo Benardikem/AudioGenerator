@@ -586,38 +586,28 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 </div>
               </div>
             )}
-            {/* Where the card sits, as a 3x3 of the frame */}
+            {/* Where the card sits over the picture */}
             {overlay && (
-                  <div className="flex items-center gap-3">
-                    <div className="grid grid-cols-3 gap-1">
-                      {(['top-left', 'top-center', 'top-right',
-                         'middle-left', 'middle-center', 'middle-right',
-                         'bottom-left', 'bottom-center', 'bottom-right'] as OverlayPosition[]).map((pos) => {
-                        const active = (overlay.position ?? 'middle-center') === pos;
-                        return (
-                          <button
-                            key={pos}
-                            type="button"
-                            title={pos.replace('-', ' ')}
-                            aria-label={pos.replace('-', ' ')}
-                            onClick={() => setOverlay({ ...overlay, position: pos })}
-                            className={`w-6 h-5 rounded-md border transition-colors cursor-pointer ${
-                              active ? 'bg-[#E8A317] border-[#E8A317]' : 'bg-white border-[#EAE3D4] hover:bg-[#F4EEE2]'
-                            }`}
-                          >
-                            <span className={`block w-1.5 h-1.5 rounded-full mx-auto ${active ? 'bg-[#181614]' : 'bg-[#DACFBE]'}`} />
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[11px] text-[#6B6256] flex-1">
-                      Where the card sits in the frame — currently{' '}
-                      <span className="font-semibold text-[#181614]">
-                        {(overlay.position ?? 'middle-center').replace('-', ' ')}
-                      </span>
-                      . It slides up as the scene starts.
-                    </p>
-                  </div>
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] font-semibold text-[#6B6256] whitespace-nowrap">
+                  Card sits
+                </label>
+                <select
+                  value={overlay.position ?? 'middle-center'}
+                  onChange={(e) => setOverlay({ ...overlay, position: e.target.value as OverlayPosition })}
+                  className="flex-1 p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+                >
+                  <option value="top-left">Top left</option>
+                  <option value="top-center">Top centre — above the picture's middle</option>
+                  <option value="top-right">Top right</option>
+                  <option value="middle-left">Middle left</option>
+                  <option value="middle-center">Middle centre</option>
+                  <option value="middle-right">Middle right</option>
+                  <option value="bottom-left">Bottom left</option>
+                  <option value="bottom-center">Bottom centre</option>
+                  <option value="bottom-right">Bottom right</option>
+                </select>
+              </div>
             )}
           </div>
 
