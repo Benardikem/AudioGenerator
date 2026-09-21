@@ -575,7 +575,12 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       ctx.clearRect(0, 0, W, H);
 
       // Helper function to draw image centered and cover
-      const drawCoverImage = (img: HTMLImageElement | HTMLVideoElement, zoomScale = 1.0, panY = 0) => {
+      const drawCoverImage = (
+        img: HTMLImageElement | HTMLVideoElement,
+        zoomScale = 1.0,
+        panY = 0,
+        exactScale?: number
+      ) => {
         // A clip in 3:4 or 16:9 is cropped to the 4:5 frame from the centre, exactly like a photo.
         const mediaW = (img as HTMLVideoElement).videoWidth || (img as HTMLImageElement).naturalWidth;
         const mediaH = (img as HTMLVideoElement).videoHeight || (img as HTMLImageElement).naturalHeight;
@@ -595,13 +600,33 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
           sy = (mediaH - sH) / 2;
         }
 
-        const scale = 1.0 + (zoomScale - 1.0) * sceneProgress;
+        const scale = exactScale ?? 1.0 + (zoomScale - 1.0) * sceneProgress;
         const dW = W * scale;
         const dH = H * scale;
         const dx = (W - dW) / 2;
         const dy = (H - dH) / 2 + panY;
 
         ctx.drawImage(img, sx, sy, sW, sH, dx, dy, dW, dH);
+      };
+
+      /**
+       * A still photograph needs to move or the advert looks like a slideshow. Each scene picks
+       * how: a slow push in, a pull back, or a drift. The numbers are deliberately gentle — a
+       * fast zoom reads as a mistake rather than as camera work.
+       */
+      const pictureMotion = () => {
+        switch (activeScene?.motion ?? 'zoom-in') {
+          case 'none':
+            return { scale: 1, panY: 0 };
+          case 'zoom-out':
+            return { scale: 1.16 - 0.16 * sceneProgress, panY: 0 };
+          case 'pan-up':
+            return { scale: 1.12, panY: 46 - 92 * sceneProgress };
+          case 'pan-down':
+            return { scale: 1.12, panY: -46 + 92 * sceneProgress };
+          default:
+            return { scale: 1 + 0.16 * sceneProgress, panY: 0 };
+        }
       };
 
       // Helper function to wrap text neatly for canvas cards
@@ -644,7 +669,10 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         if (onPhoto) {
           const img = getSceneImage(activeScene, '/scenes/scene1.jpg');
           if (videoReady(activeVideo)) drawCoverImage(activeVideo);
-          else if (img && img.complete && img.naturalWidth) drawCoverImage(img, 1.04);
+          else if (img && img.complete && img.naturalWidth) {
+            const move = pictureMotion();
+            drawCoverImage(img, 1, move.panY, move.scale);
+          }
           else { ctx.fillStyle = BRAND_COLORS.nearBlack; ctx.fillRect(0, 0, W, H); }
           ctx.fillStyle = 'rgba(24, 22, 20, 0.64)';
           ctx.fillRect(0, 0, W, H);
@@ -756,9 +784,10 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         const fallbacks = ['/scenes/scene1.jpg', '/scenes/scene2.jpg', '/scenes/scene3_v2.jpg', '/scenes/scene4.jpg'];
         const img = getSceneImage(activeScene, fallbacks[currentSceneIndex % fallbacks.length]);
         if (videoReady(activeVideo)) {
-          drawCoverImage(activeVideo); // no slow zoom: the footage already moves
+          drawCoverImage(activeVideo); // no zoom: the footage already moves
         } else if (img && img.complete && img.naturalWidth) {
-          drawCoverImage(img, 1.08);
+          const move = pictureMotion();
+          drawCoverImage(img, 1, move.panY, move.scale);
         } else {
           ctx.fillStyle = BRAND_COLORS.sand;
           ctx.fillRect(0, 0, W, H);
@@ -1206,9 +1235,17 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       if (activeScene?.overlay?.kind) {
         const o = activeScene.overlay;
         const into = time - span.start;
-        // It slides in while the advert plays. Paused — scrubbing, or judging a still frame — it is
+        const delay = Math.max(0, o.delay ?? 0.25);
+        const arrival = o.animation ?? 'rise';
+        // It arrives while the advert plays. Paused — scrubbing, or judging a still frame — it is
         // shown in place, so the scene doesn't look empty at its first moment.
-        const appear = isPlayingRef.current ? Math.min(1, Math.max(0, (into - 0.25) / 0.45)) : 1;
+        const appear = isPlayingRef.current
+          ? arrival === 'none'
+            ? into >= delay
+              ? 1
+              : 0
+            : Math.min(1, Math.max(0, (into - delay) / 0.45))
+          : 1;
         if (appear > 0) {
           const ease = 1 - Math.pow(1 - appear, 3);
           const cardW = 780;
@@ -1219,10 +1256,17 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             horizontal === 'left' ? margin : horizontal === 'right' ? W - cardW - margin : (W - cardW) / 2;
           // The bottom row stops above the captions rather than sitting behind them.
           const restY = vertical === 'top' ? 170 : vertical === 'bottom' ? H - cardH - 290 : 320;
-          const cardY = restY + (1 - ease) * 60;
+          // Rise lifts it into place, zoom grows it, fade just appears.
+          const cardY = restY + (arrival === 'rise' ? (1 - ease) * 60 : 0);
 
           ctx.save();
-          ctx.globalAlpha = ease;
+          ctx.globalAlpha = arrival === 'none' ? 1 : ease;
+          if (arrival === 'zoom') {
+            const grow = 0.92 + 0.08 * ease;
+            ctx.translate(cardX + cardW / 2, cardY + cardH / 2);
+            ctx.scale(grow, grow);
+            ctx.translate(-(cardX + cardW / 2), -(cardY + cardH / 2));
+          }
 
           // Darken the picture behind it, so the card reads whatever the footage is doing
           const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);

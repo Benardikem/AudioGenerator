@@ -68,6 +68,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [screenText, setScreenText] = useState<{ query?: string; business?: string; quote?: string }>({});
   const [disclaimer, setDisclaimer] = useState(false);
   const [rating, setRating] = useState(5);
+  const [motion, setMotion] = useState<'none' | 'zoom-in' | 'zoom-out' | 'pan-up' | 'pan-down'>('zoom-in');
 
   useEffect(() => {
     if (scene) {
@@ -85,6 +86,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setScreenText(scene.screenText ?? {});
       setDisclaimer(!!scene.disclaimer);
       setRating(scene.rating ?? 5);
+      setMotion(scene.motion ?? 'zoom-in');
       setClipError(null);
     }
   }, [scene]);
@@ -213,6 +215,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           : undefined,
       disclaimer: sceneType === 'end_card' && disclaimer ? true : undefined,
       rating: (sceneType === 'ui_search' || sceneType === 'ui_review') && rating !== 5 ? rating : undefined,
+      motion: motion !== 'zoom-in' ? motion : undefined,
       type: sceneType,
       ...(sceneType === 'text' ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
     });
@@ -305,7 +308,37 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               {uploadError && <p className="text-[11px] font-semibold text-red-700">{uploadError}</p>}
               {clipError && <p className="text-[11px] font-semibold text-red-700">{clipError}</p>}
 
-              {/* The pickers and the fit choice run the full width, so nothing sits in a narrow column */}
+              <div className="space-y-1.5">
+              <label className="block text-[11px] font-semibold text-[#6B6256]">How the picture moves</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {([
+                  { id: 'zoom-in', label: 'Zoom in' },
+                  { id: 'zoom-out', label: 'Zoom out' },
+                  { id: 'pan-up', label: 'Drift up' },
+                  { id: 'pan-down', label: 'Drift down' },
+                  { id: 'none', label: 'Still' },
+                ] as { id: typeof motion; label: string }[]).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setMotion(option.id)}
+                    className={`px-1 py-1.5 rounded-xl text-[10px] font-bold border transition-colors cursor-pointer ${
+                      motion === option.id
+                        ? 'bg-[#E8A317] border-[#E8A317] text-[#181614]'
+                        : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614] hover:bg-[#F4EEE2]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#6B6256]">
+                A still photograph needs movement or the advert looks like a slideshow. Video clips ignore
+                this — they move already.
+              </p>
+            </div>
+
+            {/* The pickers and the fit choice run the full width, so nothing sits in a narrow column */}
               <select
                 value={imageSrc}
                 onChange={(e) => setImageSrc(e.target.value)}
@@ -656,6 +689,33 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 </div>
               </div>
             )}
+            {overlay && (
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] font-semibold text-[#6B6256] whitespace-nowrap">Card arrives</label>
+                <select
+                  value={overlay.animation ?? 'rise'}
+                  onChange={(e) => setOverlay({ ...overlay, animation: e.target.value as SceneOverlay['animation'] })}
+                  className="flex-1 p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl text-[#181614] font-medium outline-hidden"
+                >
+                  <option value="rise">Rises into place</option>
+                  <option value="zoom">Zooms in</option>
+                  <option value="fade">Fades in</option>
+                  <option value="none">Straight away, no movement</option>
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.25"
+                  value={overlay.delay ?? 0.25}
+                  onChange={(e) => setOverlay({ ...overlay, delay: Number(e.target.value) })}
+                  title="Seconds into the scene before the card arrives"
+                  className="w-20 p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                />
+                <span className="text-[11px] font-semibold text-[#6B6256] whitespace-nowrap">s delay</span>
+              </div>
+            )}
+
             {/* Where the card sits over the picture */}
             {overlay && (
               <div className="flex items-center gap-2">

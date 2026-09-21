@@ -92,8 +92,12 @@ export interface SceneOverlay {
   /** Bank alert: two detail lines. Review card: the review itself, then who left it. */
   line1?: string;
   line2?: string;
-  /** Review card only: stars shown, 1 to 5. Default 5. */
+  /** Review card and page card: stars shown, 1 to 5. Default 5. */
   stars?: number;
+  /** How the card arrives. Default: rise. */
+  animation?: 'fade' | 'rise' | 'zoom' | 'none';
+  /** Seconds into the scene before it arrives. Default 0.25. */
+  delay?: number;
 }
 
 export interface AdvertScene {
@@ -114,6 +118,8 @@ export interface AdvertScene {
   clipFit?: 'slow' | 'loop' | 'hold';
   /** Stars shown on the LegitAfrica search and review screens, 1 to 5. Default: 5. */
   rating?: number;
+  /** How the picture moves while the scene plays. Default: a slow zoom in. */
+  motion?: 'none' | 'zoom-in' | 'zoom-out' | 'pan-up' | 'pan-down';
   /**
    * Small print at the foot of the end card: "Dramatisation · Names withheld". Settles for the
    * viewer whether the advert is pointing at a real business.

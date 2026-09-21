@@ -97,6 +97,9 @@ in production the server refuses to start without it.
   per advert and saved with it as `bgm`. The two built-in beds are generated in the browser, so the
   export plays them into its own audio context — do not wire them to the speakers only, or the
   exported video comes out silent underneath the voice.
+- A still picture moves through its scene by the scene's `motion` (zoom in by default, or zoom out,
+  drift up, drift down, still). Video clips ignore it — they move already.
+- An overlay card arrives by its own `animation` (rise, zoom, fade, none) after its `delay`.
 - A scene can carry an `overlay` card drawn over its picture — `debit_alert` (a bank notification)
   or `review_card` (a LegitAfrica review with stars and legitafrica.com), whose words are typed by
   the user in the scene editor. The review card exists because image generators misspell
