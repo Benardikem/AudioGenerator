@@ -235,13 +235,16 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     return video;
   };
 
-  /** A 'logo' or 'ui_review' scene given its own photo shows that photo instead of the screen. */
+  /**
+   * A 'logo' or 'ui_review' scene shows a picture instead of its LegitAfrica screen only when the
+   * picture was put there on purpose — uploaded or generated for it, or a clip. Every scene starts
+   * out holding one of the stock photos, so counting those made choosing "honest reviews" do
+   * nothing at all: the leftover stock photo won every time.
+   */
   const showsOwnPhoto = (scene: AdvertScene | undefined) =>
     !!scene &&
     (scene.type === 'logo' || scene.type === 'ui_review') &&
-    !!scene.imageSrc &&
-    scene.imageSrc !== '/brand/logo-clean.png' &&
-    scene.imageSrc !== '/brand/legitafrica-icon-transparent.png';
+    (!!scene.videoSrc || (!!scene.imageSrc && scene.imageSrc.startsWith('/api/scene-images/')));
 
   const videoReady = (video: HTMLVideoElement | null): video is HTMLVideoElement =>
     !!video && video.readyState >= 2 && video.videoWidth > 0;

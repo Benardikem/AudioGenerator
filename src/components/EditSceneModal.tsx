@@ -235,8 +235,9 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
               </label>
               {(sceneType === 'logo' || sceneType === 'ui_review') && (
                 <p className="text-[11px] text-[#6B6256]">
-                  A photo here is shown <span className="font-semibold text-[#181614]">instead of</span> the
-                  LegitAfrica screen. Pick the Gold Kudu or Brand Lockup preset to get the screen back.
+                  A photo you <span className="font-semibold text-[#181614]">upload or generate</span> here is
+                  shown instead of the LegitAfrica screen. The stock presets are ignored on this style, so the
+                  screen shows until you add a picture of your own.
                 </p>
               )}
 
