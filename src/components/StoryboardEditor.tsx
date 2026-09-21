@@ -143,12 +143,20 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
           {onGenerateScenesFromCurrentScript && (
             <button
               type="button"
-              onClick={onGenerateScenesFromCurrentScript}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Rebuild the storyboard from the script?\n\nThis replaces all ${scenes.length} scenes, including their photos, clips, cards and lengths.`
+                  )
+                ) {
+                  onGenerateScenesFromCurrentScript();
+                }
+              }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold transition-all cursor-pointer border border-[#EAE3D4]"
               title="Rebuild the scenes from the script: one scene per line"
             >
               <Sparkles className="w-3.5 h-3.5 text-[#E8A317]" />
-              <span>Auto-Sync Scenes from Script</span>
+              <span>Rebuild scenes from script</span>
             </button>
           )}
 
@@ -158,14 +166,22 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#E8A317] hover:bg-[#C6860C] text-[#181614] text-xs font-bold shadow-xs transition-all cursor-pointer"
           >
             <Check className="w-3.5 h-3.5 text-[#181614]" />
-            <span>Push Lines to Script</span>
+            <span>Copy scene lines into the script</span>
           </button>
 
           <button
             type="button"
-            onClick={onResetScenes}
-            className="p-2 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#6B6256] hover:text-[#181614] text-xs transition-colors cursor-pointer"
-            title="Reset scenes to official template"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Throw away this storyboard?\n\nAll ${scenes.length} scenes are replaced by the eight-scene example, losing every photo, clip and card on them.`
+                )
+              ) {
+                onResetScenes();
+              }
+            }}
+            className="p-2 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#6B6256] hover:text-red-600 text-xs transition-colors cursor-pointer"
+            title="Replace this storyboard with the eight-scene example"
           >
             <RotateCcw className="w-4 h-4" />
           </button>

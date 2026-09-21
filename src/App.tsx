@@ -235,7 +235,7 @@ export default function App() {
   const handleGenerateScenesFromCurrentScript = () => {
     const newScenes = generateScenesFromScript(script, campaignTitle);
     handleUpdateScenes(newScenes);
-    setDbNotice('Synced 8 visual storyboard scenes to match your current script!');
+    setDbNotice(`Rebuilt the storyboard: ${newScenes.length} scenes, one per line of the script.`);
     setTimeout(() => setDbNotice(null), 4000);
   };
 
