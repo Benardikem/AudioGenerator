@@ -25,6 +25,7 @@ import { sceneTimeline, MAX_SCENES } from '../utils/sceneTimeline';
 import { AdvertScene } from '../types';
 import { BRAND_COLORS, ADVERT_SCENES } from '../data/advertScenes';
 import { EditSceneModal } from './EditSceneModal';
+import { ConfirmationModal } from './ConfirmationModal';
 
 interface StoryboardEditorProps {
   scenes: AdvertScene[];
@@ -71,9 +72,15 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
   };
   const removeScene = (idx: number) => {
     if (scenes.length <= 1) return;
-    if (!window.confirm(`Delete scene ${idx + 1}?`)) return;
-    replaceScenes(scenes.filter((_, i) => i !== idx));
-    onSelectScene(Math.max(0, Math.min(idx, scenes.length - 2)));
+    setConfirming({
+      title: `Delete scene ${idx + 1}?`,
+      message: `"${(scenes[idx]?.voiceLine || '').slice(0, 90) || 'This scene'}" and its picture, clip and cards are removed from the advert.`,
+      confirmLabel: 'Delete scene',
+      onConfirm: () => {
+        replaceScenes(scenes.filter((_, i) => i !== idx));
+        onSelectScene(Math.max(0, Math.min(idx, scenes.length - 2)));
+      },
+    });
   };
   const moveScene = (idx: number, dir: -1 | 1) => {
     const j = idx + dir;
@@ -85,6 +92,12 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
   };
 
   const [modalScene, setModalScene] = useState<AdvertScene | null>(null);
+  const [confirming, setConfirming] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [syncNotice, setSyncNotice] = useState('');
@@ -143,15 +156,14 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
           {onGenerateScenesFromCurrentScript && (
             <button
               type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    `Rebuild the storyboard from the script?\n\nThis replaces all ${scenes.length} scenes, including their photos, clips, cards and lengths.`
-                  )
-                ) {
-                  onGenerateScenesFromCurrentScript();
-                }
-              }}
+              onClick={() =>
+                setConfirming({
+                  title: 'Rebuild the storyboard from the script?',
+                  message: `All ${scenes.length} scenes are replaced by one scene per line of the script. Their photos, clips, cards and lengths are lost.`,
+                  confirmLabel: 'Rebuild scenes',
+                  onConfirm: () => onGenerateScenesFromCurrentScript(),
+                })
+              }
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] text-xs font-bold transition-all cursor-pointer border border-[#EAE3D4]"
               title="Rebuild the scenes from the script: one scene per line"
             >
@@ -171,15 +183,14 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              if (
-                window.confirm(
-                  `Throw away this storyboard?\n\nAll ${scenes.length} scenes are replaced by the eight-scene example, losing every photo, clip and card on them.`
-                )
-              ) {
-                onResetScenes();
-              }
-            }}
+            onClick={() =>
+              setConfirming({
+                title: 'Throw away this storyboard?',
+                message: `All ${scenes.length} scenes are replaced by the eight-scene example, losing every photo, clip and card on them.`,
+                confirmLabel: 'Replace with the example',
+                onConfirm: onResetScenes,
+              })
+            }
             className="p-2 rounded-xl bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#6B6256] hover:text-red-600 text-xs transition-colors cursor-pointer"
             title="Replace this storyboard with the eight-scene example"
           >
@@ -381,6 +392,19 @@ export const StoryboardEditor: React.FC<StoryboardEditorProps> = ({
       </div>
 
       {/* Edit Scene Focused Modal */}
+      <ConfirmationModal
+        isOpen={confirming !== null}
+        title={confirming?.title ?? ''}
+        message={confirming?.message ?? ''}
+        confirmLabel={confirming?.confirmLabel ?? 'Confirm'}
+        isDestructive
+        onConfirm={() => {
+          confirming?.onConfirm();
+          setConfirming(null);
+        }}
+        onCancel={() => setConfirming(null)}
+      />
+
       <EditSceneModal
         isOpen={isModalOpen}
         scene={modalScene}
