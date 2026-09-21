@@ -378,6 +378,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   isPlayingRef.current = isPlaying;
 
   const lastNotifiedSceneRef = useRef<number>(-1);
+  const lastUiTimeRef = useRef<number>(-1);
   const lastExternalSceneRef = useRef<number>(-1);
 
   // Tell the parent which scene is showing, but only while the advert is actually playing.
@@ -522,7 +523,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
    * frame is 1920 tall, and the drawing below is full of fixed positions written for 1350 — before
    * this, the picture simply stopped 570 pixels short of the bottom.
    */
-  const designCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const incomingCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const makeDesignSized = (ref: React.MutableRefObject<HTMLCanvasElement | null>) => {
     if (!ref.current) {
@@ -533,16 +533,26 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     }
     return ref.current;
   };
-  const getDesignCanvas = () => makeDesignSized(designCanvasRef);
   /** The scene coming up, painted separately so it can be dissolved over the one going out. */
   const getIncomingCanvas = () => makeDesignSized(incomingCanvasRef);
+  const bandCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** A thumbnail of the frame; stretched, it becomes the soft fill above and below a 9:16 advert. */
+  const getBandCanvas = () => {
+    if (!bandCanvasRef.current) {
+      const c = document.createElement('canvas');
+      c.width = 36;
+      c.height = 45;
+      bandCanvasRef.current = c;
+    }
+    return bandCanvasRef.current;
+  };
 
   /**
    * Paints one moment of the advert at 1080x1350. Kept separate so a scene change can paint
    * the outgoing scene and the incoming one and dissolve between them, instead of cutting
    * hard from a picture at the end of its zoom to the next at the start of its own.
    */
-  const paintScene = (ctx: CanvasRenderingContext2D, timeToDraw: number) => {
+  const paintScene = (ctx: CanvasRenderingContext2D, timeToDraw: number, outgoing = false) => {
     const W = VIDEO_CONFIG.width; // 1080
     const H = VIDEO_CONFIG.height; // 1350
     const time = typeof timeToDraw === 'number' ? timeToDraw : currentTimeRef.current;
@@ -556,16 +566,19 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     const activeScene = sceneList[sceneIndex] || sceneList[0];
 
     const activeVideo = getSceneVideo(activeScene);
-    if (activeClipSrc.current !== (activeScene?.videoSrc ?? null)) {
-      // Leaving a scene: stop its clip and rewind, so coming back to it starts from the top.
+    // The outgoing scene of a dissolve is drawn as it stood — its clip is left alone. Running the
+    // clip logic for both scenes every frame paused one clip and played the other, back and forth,
+    // for the whole dissolve.
+    if (!outgoing && activeClipSrc.current !== (activeScene?.videoSrc ?? null)) {
+      // Leaving a scene: stop its clip. No rewind — the sync below puts a clip where it belongs
+      // when its scene comes back, and rewinding here showed the clip's first frame mid-dissolve.
       preloadedVideos.current.forEach((video, src) => {
         if (src === activeScene?.videoSrc) return;
         video.pause();
-        if (video.currentTime !== 0) video.currentTime = 0;
       });
       activeClipSrc.current = activeScene?.videoSrc ?? null;
     }
-    if (activeVideo) {
+    if (activeVideo && !outgoing) {
       syncSceneVideo(
         activeVideo,
         time - span.start,
@@ -1547,58 +1560,74 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const drawSceneToCanvas = useCallback((timeToDraw: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const design = getDesignCanvas();
-    const ctx = design.getContext('2d');
-    if (!ctx) return;
+    const out = canvas.getContext('2d');
+    if (!out) return;
 
     const W = VIDEO_CONFIG.width;
     const H = VIDEO_CONFIG.height;
+    const frameW = canvas.width;
+    const frameH = canvas.height;
     const time = typeof timeToDraw === 'number' ? timeToDraw : currentTimeRef.current;
     const spansNow = spansRef.current;
     const index = sceneIndexAt(spansNow, time);
     const into = time - (spansNow[index]?.start ?? 0);
 
+    // The advert is painted straight onto the screen. It used to be painted off-screen and then
+    // copied across, and that copy took three times as long as the painting — enough on its own
+    // to make playback stutter.
+    const taller = frameW !== W || frameH !== H;
+    const fit = Math.min(frameW / W, frameH / H);
+    const offsetX = (frameW - W * fit) / 2;
+    const offsetY = (frameH - H * fit) / 2;
+
+    if (taller) {
+      // Soft fill above and below: last frame's thumbnail, stretched. A frame behind is invisible
+      // at this blur, and it means the advert only has to be painted once. Only the two bands are
+      // filled — the advert covers the middle, and stretching the thumbnail across the whole
+      // 1920-tall frame every frame was what kept 9:16 stuttering.
+      const fill = Math.max(frameW / W, frameH / H);
+      const bottom = offsetY + H * fit;
+      out.save();
+      out.beginPath();
+      out.rect(0, 0, frameW, offsetY);
+      out.rect(0, bottom, frameW, frameH - bottom);
+      out.clip();
+      out.imageSmoothingEnabled = true;
+      out.imageSmoothingQuality = 'low';
+      out.drawImage(getBandCanvas(), (frameW - W * fill) / 2, (frameH - H * fill) / 2, W * fill, H * fill);
+      out.fillStyle = 'rgba(24, 22, 20, 0.25)';
+      out.fillRect(0, 0, frameW, frameH);
+      out.restore();
+    }
+
+    out.save();
+    if (taller) {
+      out.translate(offsetX, offsetY);
+      out.scale(fit, fit);
+    }
+
     if (index > 0 && into < SCENE_DISSOLVE && isPlayingRef.current) {
       // The scene just before this one, held on its last frame, with the new one coming up
-      // through it.
-      paintScene(ctx, (spansNow[index]?.start ?? 0) - 0.02);
+      // through it. Only the incoming scene needs a canvas of its own, and only for 0.4 seconds.
+      paintScene(out, (spansNow[index]?.start ?? 0) - 0.02, true);
       const incoming = getIncomingCanvas();
       const ictx = incoming.getContext('2d');
       if (ictx) {
         paintScene(ictx, time);
-        ctx.save();
-        ctx.globalAlpha = Math.min(1, into / SCENE_DISSOLVE);
-        ctx.drawImage(incoming, 0, 0);
-        ctx.restore();
+        out.globalAlpha = Math.min(1, into / SCENE_DISSOLVE);
+        out.drawImage(incoming, 0, 0);
+        out.globalAlpha = 1;
       }
     } else {
-      paintScene(ctx, time);
+      paintScene(out, time);
     }
+    out.restore();
 
-      // Place the composed advert into the frame that is showing. Taller frames get a blurred,
-      // enlarged copy behind it rather than empty bands — the usual treatment for a 4:5 advert
-      // posted as a Reel or a TikTok.
-      const out = canvas.getContext('2d');
-      if (!out) return;
-      const frameW = canvas.width;
-      const frameH = canvas.height;
-      out.clearRect(0, 0, frameW, frameH);
-      if (frameW === W && frameH === H) {
-        out.drawImage(design, 0, 0);
-      } else {
-        const fill = Math.max(frameW / W, frameH / H);
-        const fw = W * fill;
-        const fh = H * fill;
-        out.save();
-        out.filter = 'blur(40px)';
-        out.drawImage(design, (frameW - fw) / 2, (frameH - fh) / 2, fw, fh);
-        out.restore();
-
-        const fit = Math.min(frameW / W, frameH / H);
-        const dw = W * fit;
-        const dh = H * fit;
-        out.drawImage(design, (frameW - dw) / 2, (frameH - dh) / 2, dw, dh);
-      }
+    if (taller) {
+      const tiny = getBandCanvas();
+      const tctx = tiny.getContext('2d');
+      tctx?.drawImage(canvas, offsetX, offsetY, W * fit, H * fit, 0, 0, tiny.width, tiny.height);
+    }
     },
     [sceneList, cues, subtitlesEnabled, subtitleStyle, spans]
   );
@@ -1685,7 +1714,13 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       currentTimeRef.current = nextTime;
-      setCurrentTime(nextTime);
+      // The picture is drawn every frame, but the rest of the page — scrubber, clock, scene list —
+      // only needs to catch up ten times a second. Updating it every frame re-rendered the whole
+      // studio sixty times a second and stole time from the drawing.
+      if (Math.abs(nextTime - lastUiTimeRef.current) >= 0.1 || nextTime === 0) {
+        lastUiTimeRef.current = nextTime;
+        setCurrentTime(nextTime);
+      }
       drawSceneToCanvas(nextTime);
 
       if (isPlayingRef.current) {
