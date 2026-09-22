@@ -64,6 +64,7 @@ const apply = async () => {
 };
 const playButton = () =>
   page.locator('button').filter({ has: page.locator('svg.lucide-play') }).filter({ hasNotText: /Generate/ }).first();
+const pauseButton = () => page.locator('button').filter({ has: page.locator('svg.lucide-pause') }).first();
 const sceneCount = async () => parseInt((await page.locator('text=/\\d+ of 24 scenes/').first().textContent()) || '0');
 const creamShare = () =>
   page.evaluate(() => {
@@ -382,7 +383,7 @@ await page.getByPlaceholder('Auto').fill('0.3');
 await page.getByPlaceholder('e.g. 7').fill('8');
 await apply();
 await toPreview();
-await page.getByRole('button', { name: '1', exact: true }).first().click();
+await page.locator('#preview-scene-list [data-scene-index="0"]').click();
 await page.waitForTimeout(1000);
 const trace = page.evaluate(
   () =>
@@ -415,6 +416,31 @@ const darkest = Math.min(...frames.map(([, l]) => l));
 const pictureIn = frames.find(([, l]) => l <= darkest + 1.5)?.[0] ?? 0;
 const firstText = frames.find(([t, , x]) => t > pictureIn && x > 20)?.[0] ?? 0;
 check(firstText - pictureIn >= 500, `after a scene change, row 1 waits for the picture to be in (${Math.round(firstText - pictureIn)}ms after)`);
+
+// The scene list beside the preview follows playback, and there is no second row of scene buttons
+await newAd('List follows', Array.from({ length: 12 }, (_, i) => `Scene number ${i + 1} line.`));
+await toPreview();
+check((await page.locator('text=/Jump to Scene/').count()) === 0, 'the preview has one scene list, not a second row of buttons');
+await page.locator('#preview-scene-list [data-scene-index="8"]').click();
+await page.waitForTimeout(1200);
+const inView = (i) =>
+  page.evaluate((i) => {
+    const list = document.querySelector('#preview-scene-list');
+    const item = list.querySelector(`[data-scene-index="${i}"]`);
+    const a = list.getBoundingClientRect();
+    const b = item.getBoundingClientRect();
+    return b.top >= a.top - 1 && b.bottom <= a.bottom + 1 && /ring-1/.test(item.className);
+  }, i);
+check(await inView(8), 'clicking a scene far down the list highlights it and keeps it in view');
+await page.locator('#preview-scene-list [data-scene-index="0"]').click();
+await page.waitForTimeout(1200);
+await playButton().click();
+for (let i = 0; i < 80 && !/Scene ([7-9]|1\d) of/.test((await page.locator('text=/Active: Scene \\d+ of/').first().textContent()) || ''); i++) 
+  await page.waitForTimeout(250);
+await pauseButton().click(); // while playing, the play-icon helper would find the restart button
+await page.waitForTimeout(900);
+const playing = parseInt(/Scene (\d+) of/.exec((await page.locator('text=/Active: Scene \\d+ of/').first().textContent()) || '')?.[1] || '0') - 1;
+check(playing >= 6 && (await inView(playing)), `the list moves along with playback (scene ${playing + 1} highlighted and in view)`);
 
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();

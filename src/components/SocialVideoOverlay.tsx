@@ -369,6 +369,18 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   const spansRef = useRef(spans);
   spansRef.current = spans;
   const currentSceneIndex = sceneIndexAt(spans, currentTime);
+
+  // Keep the scene that is playing in view in the list beside the preview. Only the list scrolls:
+  // scrollIntoView would drag the whole page along with it.
+  const sceneListRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const list = sceneListRef.current;
+    const item = list?.querySelector<HTMLElement>(`[data-scene-index="${currentSceneIndex}"]`);
+    if (!list || !item) return;
+    const top = item.offsetTop - list.offsetTop;
+    const target = top - (list.clientHeight - item.offsetHeight) / 2;
+    list.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+  }, [currentSceneIndex]);
   const activeScene = sceneList[currentSceneIndex] || sceneList[0];
 
   // Stable references to prevent render loops & canvas tearing
@@ -2172,55 +2184,20 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left: 4:5 Portrait Video Frame */}
         <div className="lg:order-2 flex flex-col items-center">
-          {/* Quick Scene Selector Buttons */}
-          <div className="w-full max-w-[460px] mb-2.5">
-            <div className="flex items-center justify-between text-xs text-[#6B6256] mb-1.5 px-0.5">
-              <span className="font-bold text-[#181614] flex items-center gap-1">
-                <Layers className="w-3.5 h-3.5 text-[#E8A317]" />
-                Jump to Scene:
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => drawSceneToCanvas(currentTimeRef.current)}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#181614] bg-[#F4EEE2] hover:bg-[#E8A317] border border-[#EAE3D4] rounded-md transition-all cursor-pointer"
-                  title="Click to instantly redraw canvas with latest scene changes"
-                >
-                  <RotateCcw className="w-2.5 h-2.5 text-[#181614]" />
-                  <span>Redraw</span>
-                </button>
-                <span className="text-[11px] font-bold text-[#E8A317]">
-                  Scene {currentSceneIndex + 1} of {sceneList.length}
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {sceneList.map((_, sIdx) => {
-                const isActive = currentSceneIndex === sIdx;
-                return (
-                  <button
-                    key={sIdx}
-                    type="button"
-                    onClick={() => handleJumpToScene(sIdx)}
-                    className={`py-1 min-w-[40px] flex-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-[#E8A317] text-[#181614] border-[#E8A317] shadow-xs ring-1 ring-[#E8A317]'
-                        : 'bg-[#F4EEE2] hover:bg-[#EAE3D4] text-[#181614] border-[#EAE3D4]'
-                    }`}
-                    title={`Preview Scene ${sIdx + 1}`}
-                  >
-                    {sIdx + 1}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           <div className="w-full max-w-[460px] flex items-center justify-between text-xs text-[#6B6256] mb-2 px-1">
             <span className="font-semibold text-[#181614] flex items-center gap-1.5">
               <Camera className="w-3.5 h-3.5 text-[#E8A317]" />
               {currentVideoConfig.label} Frame ({currentVideoConfig.width}×{currentVideoConfig.height})
             </span>
+            <button
+              type="button"
+              onClick={() => drawSceneToCanvas(currentTimeRef.current)}
+              className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#181614] bg-[#F4EEE2] hover:bg-[#E8A317] border border-[#EAE3D4] rounded-md transition-all cursor-pointer"
+              title="Redraw the frame with your latest scene changes"
+            >
+              <RotateCcw className="w-2.5 h-2.5 text-[#181614]" />
+              <span>Redraw</span>
+            </button>
             <span className="font-mono text-[11px]">
               {Math.floor(currentTime)}s / {Math.floor(totalDuration)}s
             </span>
@@ -2455,8 +2432,8 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
             </div>
           </div>
 
-          {/* Scene list */}
-          <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+          {/* Scene list: follows the playhead, so the scene playing is always the one in view */}
+          <div ref={sceneListRef} id="preview-scene-list" className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
             {sceneList.map((scene, idx) => {
               const isActive = currentSceneIndex === idx;
               const isCustomized =
@@ -2466,6 +2443,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               return (
                 <div
                   key={scene.id}
+                  data-scene-index={idx}
                   onClick={() => handleJumpToScene(idx)}
                   className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
                     isActive
