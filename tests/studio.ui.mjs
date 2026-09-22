@@ -262,6 +262,27 @@ await page.waitForTimeout(1200);
 await page.getByRole('button', { name: /Use this voiceover/i }).click();
 await page.waitForTimeout(300);
 check(/\(7s\)/.test(await readyText()), 'choosing the new take puts it on the ad');
+
+// Moving on while a new take still waits to be chosen asks, instead of silently keeping the old one
+await page.locator('#generate-commercial-audio-btn').click();
+await page.waitForTimeout(1200);
+await page.getByRole('button', { name: /Next: Storyboard/i }).click();
+await page.waitForTimeout(400);
+check((await page.locator("text=/You haven't chosen the new voiceover/").count()) > 0, 'leaving with a new voiceover not yet chosen asks which to keep');
+await page.getByRole('button', { name: 'Keep the old one' }).click();
+await page.waitForTimeout(500);
+check((await page.locator('text=/Storyboard Scenes|Match scenes to voiceover/').count()) > 0, 'after answering, it goes on to the Storyboard');
+await page.getByRole('button', { name: /Script & Voiceover/i }).first().click();
+await page.waitForTimeout(500);
+
+// Saving records the voice the recording was made with, not whichever voice is selected now
+await page.getByText('Kofi', { exact: true }).first().click();
+await page.waitForTimeout(200);
+const saveReq = page.waitForRequest((r) => r.url().includes('/api/commercials') && ['POST', 'PUT'].includes(r.method()), { timeout: 8000 });
+await page.getByRole('button', { name: /^Save$/ }).first().click();
+const savedBody = JSON.parse((await saveReq).postData() || '{}');
+check(savedBody.voice === 'Zephyr', `saving records the recording's own voice (${savedBody.voice}), not the one picked afterwards`);
+await page.waitForTimeout(800);
 await page.unroute('**/api/generate-commercial-audio');
 
 // Side fly-in text: rows start from the spoken line and arrive one after another
@@ -570,6 +591,15 @@ await page.getByRole('button', { name: 'Use this version' }).click();
 await page.waitForTimeout(200);
 check((await scriptNow()) === 'A totally different script.', 'choosing the rewrite puts it in the script');
 await page.unroute('**/api/polish-script');
+
+// Editing the script after the scenes were made is pointed out on the Storyboard
+await newAd('Script edited', ['First line.', 'Second line.']);
+await page.locator('#commercial-script-textarea').fill('First line changed.\nSecond line.');
+await toStoryboard();
+check((await page.locator('#script-changed-banner').count()) === 1, 'the Storyboard says when the script has changed since its scenes were made');
+await page.getByRole('button', { name: 'Keep these scenes' }).click();
+await page.waitForTimeout(200);
+check((await page.locator('#script-changed-banner').count()) === 0, 'keeping the scenes puts the notice away');
 
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();

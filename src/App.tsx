@@ -114,10 +114,12 @@ export default function App() {
         id: activeCommercialId || undefined,
         title,
         script,
-        voice: selectedVoice,
-        voiceName: selectedVoiceObj.name,
-        timbre: selectedTimbre,
-        style: selectedStyle,
+        // The voice the recording was actually made with. Taken from the picker, a Folake
+        // recording was saved as Damilola just because Damilola was selected at the time.
+        voice: activeCommercial?.voice ?? selectedVoice,
+        voiceName: activeCommercial?.voiceName ?? selectedVoiceObj.name,
+        timbre: (activeCommercial?.timbre as typeof selectedTimbre | undefined) ?? selectedTimbre,
+        style: activeCommercial?.style ?? selectedStyle,
         audioUrl: activeCommercial?.audioUrl,
         duration: activeCommercial?.duration,
         scenes: JSON.stringify(scenes),
@@ -444,10 +446,52 @@ export default function App() {
     { id: 'storyboard', label: 'Storyboard' },
     { id: 'video', label: 'Preview & Download' },
   ];
+  // Where the person was heading when a new voiceover was still waiting to be chosen.
+  const [leavingTo, setLeavingTo] = useState<AppPage | null>(null);
   const goToStep = (page: AppPage) => {
+    if (pendingTake && page !== 'script') {
+      setLeavingTo(page);
+      return;
+    }
     setActivePage(page);
     window.scrollTo(0, 0);
   };
+  const leaveWithTake = (useNew: boolean) => {
+    if (useNew && pendingTake) {
+      setActiveCommercial(pendingTake);
+      setDbNotice('New voiceover in use. If you matched scenes to the old one, press "Match scenes to voiceover" again.');
+      setTimeout(() => setDbNotice(null), 8000);
+    }
+    setPendingTake(null);
+    const page = leavingTo;
+    setLeavingTo(null);
+    if (page) {
+      setActivePage(page);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  // Whether the storyboard still speaks the script's words. Scenes are made from the script once;
+  // editing the script afterwards left them on the old lines with nothing said.
+  const wordsOf = (text: string) =>
+    text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+  const scriptWords = wordsOf(script);
+  const sceneWords = wordsOf(scenes.map((s) => s.voiceLine).join(' '));
+  const firstDiff = (() => {
+    const n = Math.max(scriptWords.length, sceneWords.length);
+    for (let i = 0; i < n; i++) if (scriptWords[i] !== sceneWords[i]) return i;
+    return -1;
+  })();
+  const [keptScenesFor, setKeptScenesFor] = useState<string | null>(null);
+  const [confirmRebuild, setConfirmRebuild] = useState(false);
+  const scriptOutOfStep = firstDiff >= 0 && keptScenesFor !== script;
+  const around = (words: string[], i: number) => words.slice(Math.max(0, i - 2), i + 4).join(' ');
   const nextStep = (page: AppPage, label: string) => (
     <div className="max-w-4xl mx-auto mt-8 flex justify-end">
       <button
@@ -675,7 +719,7 @@ export default function App() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setActivePage('video')}
+                  onClick={() => goToStep('video')}
                   className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
@@ -846,6 +890,33 @@ export default function App() {
 
         {activePage === 'storyboard' && (
           <div className="space-y-6 animate-in fade-in duration-200">
+            {scriptOutOfStep && (
+              <div id="script-changed-banner" className="bg-amber-50 border border-amber-300 p-4 rounded-2xl space-y-2">
+                <h4 className="text-sm font-bold text-[#181614]">Your script has changed since these scenes were made</h4>
+                <p className="text-xs text-[#6B6256] leading-relaxed">
+                  The script says <span className="font-semibold text-[#181614]">“…{around(scriptWords, firstDiff)}…”</span>{' '}
+                  where the scenes say{' '}
+                  <span className="font-semibold text-[#181614]">“…{around(sceneWords, firstDiff) || 'nothing'}…”</span>. Matching
+                  scenes to the voiceover goes by the scene lines, so they should say what is spoken.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRebuild(true)}
+                    className="px-4 py-2 text-xs font-bold text-white bg-[#181614] hover:bg-black rounded-xl cursor-pointer"
+                  >
+                    Rebuild scenes from the new script
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKeptScenesFor(script)}
+                    className="px-4 py-2 text-xs font-bold text-[#181614] bg-white border border-[#EAE3D4] hover:bg-[#F4EEE2] rounded-xl cursor-pointer"
+                  >
+                    Keep these scenes
+                  </button>
+                </div>
+              </div>
+            )}
             <StoryboardEditor
               scenes={scenes}
               activeSceneIndex={activeSceneIndex}
@@ -940,6 +1011,30 @@ export default function App() {
           </>
         )}
       </main>
+
+      <ConfirmationModal
+        isOpen={leavingTo !== null}
+        title="You haven't chosen the new voiceover"
+        message="The voiceover you just made is waiting under the Generate button. Until you choose it, this ad keeps playing its old voiceover."
+        confirmLabel="Use the new voiceover"
+        cancelLabel="Keep the old one"
+        onConfirm={() => leaveWithTake(true)}
+        onCancel={() => leaveWithTake(false)}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmRebuild}
+        title="Rebuild the scenes from the new script?"
+        message="Every scene is made again, one per line of the script. Pictures, styles and cards you set on the current scenes are replaced."
+        confirmLabel="Rebuild scenes"
+        cancelLabel="Cancel"
+        isDestructive
+        onConfirm={() => {
+          setConfirmRebuild(false);
+          handleGenerateScenesFromCurrentScript();
+        }}
+        onCancel={() => setConfirmRebuild(false)}
+      />
 
       <ConfirmationModal
         isOpen={offerBackupVoice}
