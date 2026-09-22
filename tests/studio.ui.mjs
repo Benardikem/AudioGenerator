@@ -601,6 +601,29 @@ await page.getByRole('button', { name: 'Keep these scenes' }).click();
 await page.waitForTimeout(200);
 check((await page.locator('#script-changed-banner').count()) === 0, 'keeping the scenes puts the notice away');
 
+// Typing a different story into a saved ad and pressing Save asks first (the Japa script was saved
+// over the wedding ad), and Save as a new ad leaves the first ad as it was
+const storyA = ['I no understand why my sister go dey cry for her own wedding morning.', 'Three months before the day she find one makeup and gele vendor for Instagram with plenty followers.', 'Dem collect eighty five thousand naira deposit and assure her say dem don lock the date.'];
+const storyB = ['My cousin Chidi don dey talk about Canada for like two years now.', 'Last year he come across one travel agent for TikTok wey wear suit and get big office.', 'Dem tell am say the work visa na three million with ninety nine percent approval.'];
+await newAd('Story A', storyA);
+await page.getByRole('button', { name: /^Save$/ }).first().click();
+await page.waitForTimeout(1500);
+await page.locator('#commercial-script-textarea').fill(storyB.join('\n'));
+await page.getByRole('button', { name: /^Save$/ }).first().click();
+await page.waitForTimeout(500);
+check((await page.locator('#different-story-modal').count()) === 1, 'saving a very different script over an ad asks first');
+await page.getByPlaceholder('Name for the new ad, e.g. Japa Wahala').fill('Story B');
+await page.getByRole('button', { name: 'Save as a new ad' }).click();
+await page.waitForTimeout(2000);
+const ads = await page.evaluate(async () => (await (await fetch('/api/commercials', { credentials: 'same-origin' })).json()));
+const list = Array.isArray(ads) ? ads : ads.commercials || [];
+const a = list.find((c) => c.title === 'Story A');
+const b = list.find((c) => c.title === 'Story B');
+check(!!a && a.script.startsWith('I no understand') && !!b && b.script.startsWith('My cousin Chidi'), 'Save as a new ad keeps the first ad and stores the new story on its own');
+const bScenes = b ? (typeof b.scenes === 'string' ? JSON.parse(b.scenes) : b.scenes) : [];
+check(bScenes.length === 3 && bScenes[0].voiceLine.startsWith('My cousin Chidi'), 'the new ad gets its own storyboard from its script');
+check((await page.locator('input[type="text"]').first().inputValue()) === 'Story B', 'the studio moves on to the new ad');
+
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();
 check((await page.locator('text=/Captions: (ON|OFF)/').count()) === 0, 'the preview has no captions switch');

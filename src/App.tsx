@@ -106,12 +106,13 @@ export default function App() {
   }, []);
 
   // Save current active state to database
-  const handleSaveCurrentCommercial = async (title: string) => {
+  // asNew: store as a separate ad with scenes made from this script, leaving the open ad as it was.
+  const handleSaveCurrentCommercial = async (title: string, asNew?: { scenes: AdvertScene[] }) => {
     setIsSavingDb(true);
     setDbNotice(null);
     try {
       const saved = await saveCommercial({
-        id: activeCommercialId || undefined,
+        id: asNew ? undefined : activeCommercialId || undefined,
         title,
         script,
         // The voice the recording was actually made with. Taken from the picker, a Folake
@@ -122,7 +123,7 @@ export default function App() {
         style: activeCommercial?.style ?? selectedStyle,
         audioUrl: activeCommercial?.audioUrl,
         duration: activeCommercial?.duration,
-        scenes: JSON.stringify(scenes),
+        scenes: JSON.stringify(asNew ? asNew.scenes : scenes),
         aspectRatio: aspectRatio,
         bgm,
       });
@@ -492,6 +493,31 @@ export default function App() {
   const [confirmRebuild, setConfirmRebuild] = useState(false);
   const scriptOutOfStep = firstDiff >= 0 && keptScenesFor !== script;
   const around = (words: string[], i: number) => words.slice(Math.max(0, i - 2), i + 4).join(' ');
+
+  // Saving a script that shares little with the one this ad was saved with is almost always a new
+  // story typed into the wrong ad: the Japa script was saved over the wedding ad that way.
+  const [differentStory, setDifferentStory] = useState(false);
+  const [newAdName, setNewAdName] = useState('');
+  const requestSave = () => {
+    const before = new Set(wordsOf(savedAd?.script ?? ''));
+    const now = new Set(scriptWords);
+    const shared = [...now].filter((w) => before.has(w)).length;
+    const overlap = shared / Math.max(1, new Set([...before, ...now]).size);
+    if (savedAd && before.size > 20 && now.size > 20 && overlap < 0.5) {
+      setNewAdName('');
+      setDifferentStory(true);
+      return;
+    }
+    handleSaveCurrentCommercial(campaignTitle);
+  };
+  const saveAsNewAd = async () => {
+    const name = newAdName.trim() || 'New ad';
+    const fresh = stampScenes(generateScenesFromScript(script, name));
+    setDifferentStory(false);
+    await handleSaveCurrentCommercial(name, { scenes: fresh });
+    handleUpdateScenes(fresh);
+    setActiveSceneIndex(0);
+  };
   const nextStep = (page: AppPage, label: string) => (
     <div className="max-w-4xl mx-auto mt-8 flex justify-end">
       <button
@@ -597,7 +623,7 @@ export default function App() {
               <button
                 type="button"
                 id="save-ad-btn"
-                onClick={() => handleSaveCurrentCommercial(campaignTitle)}
+                onClick={requestSave}
                 disabled={isSavingDb || saveStatus === 'saved'}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-[#181614] bg-[#E8A317] hover:bg-[#C6860C] disabled:opacity-50 disabled:cursor-default transition-all font-bold text-xs cursor-pointer shadow-xs"
               >
@@ -1011,6 +1037,53 @@ export default function App() {
           </>
         )}
       </main>
+
+      {differentStory && (
+        <div className="fixed inset-0 z-50 bg-[#181614]/70 flex items-center justify-center p-4">
+          <div id="different-story-modal" className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#EAE3D4]">
+            <div>
+              <h3 className="text-base font-bold text-[#181614]">This looks like a different story</h3>
+              <p className="text-xs text-[#6B6256] mt-1 leading-relaxed">
+                The script is very different from the one saved in “{savedAd?.title}”. Saving here would replace that ad's
+                script and voiceover. Save it as a new ad instead, with its own storyboard?
+              </p>
+            </div>
+            <input
+              value={newAdName}
+              onChange={(e) => setNewAdName(e.target.value)}
+              placeholder="Name for the new ad, e.g. Japa Wahala"
+              className="w-full p-2.5 text-sm bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+            />
+            <div className="flex flex-wrap gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setDifferentStory(false)}
+                className="px-4 py-2 text-xs font-bold text-[#6B6256] hover:text-[#181614] rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDifferentStory(false);
+                  handleSaveCurrentCommercial(campaignTitle);
+                }}
+                className="px-4 py-2 text-xs font-bold text-[#181614] bg-white border border-[#EAE3D4] hover:bg-[#F4EEE2] rounded-xl cursor-pointer"
+              >
+                Save here anyway
+              </button>
+              <button
+                type="button"
+                onClick={saveAsNewAd}
+                disabled={!newAdName.trim()}
+                className="px-4 py-2 text-xs font-bold text-white bg-[#181614] hover:bg-black rounded-xl cursor-pointer disabled:opacity-40"
+              >
+                Save as a new ad
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmationModal
         isOpen={leavingTo !== null}

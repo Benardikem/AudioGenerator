@@ -39,15 +39,24 @@ export function generateScenesFromScript(
   const isHousing = scenario === 'housing';
   const isAuto = scenario === 'auto';
 
-  // One scene per line of script. Only a script longer than the cap is merged, pairing lines
-  // from the start until it fits.
-  let voiceLines: string[] = rawLines;
+  // One scene per line of script. A script longer than the cap joins only as many lines as it
+  // must, one pair at a time: pairing every line from the start turned a 25-line script into 13
+  // scenes. The pair joined is the one with the fewest words between them, and a very short line
+  // ("Chidi no argue. He pay am.") joins the line before it first. The closing line keeps its own
+  // scene, since it is the end card.
+  let voiceLines: string[] = [...rawLines];
+  const wordsIn = (l: string) => l.split(/\s+/).filter(Boolean).length;
   while (voiceLines.length > MAX_SCENES) {
-    const merged: string[] = [];
-    for (let i = 0; i < voiceLines.length; i += 2) {
-      merged.push(voiceLines.slice(i, i + 2).join(' '));
+    let best = 0;
+    let bestCost = Infinity;
+    for (let i = 0; i < voiceLines.length - 2; i++) {
+      const cost = wordsIn(voiceLines[i]) + wordsIn(voiceLines[i + 1]) - (wordsIn(voiceLines[i + 1]) <= 6 ? 10 : 0);
+      if (cost < bestCost) {
+        bestCost = cost;
+        best = i;
+      }
     }
-    voiceLines = merged;
+    voiceLines.splice(best, 2, `${voiceLines[best]} ${voiceLines[best + 1]}`);
   }
   if (voiceLines.length === 0) {
     voiceLines = [

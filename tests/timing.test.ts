@@ -4,6 +4,7 @@
  */
 import { sceneTimeline, clipFrameAt, sideRows } from '../src/utils/sceneTimeline';
 import { pickCuts } from '../src/utils/audioAlign';
+import { generateScenesFromScript } from '../src/utils/sceneGenerator';
 import { VOICE_OPTIONS } from '../src/components/VoiceSelector';
 import { VOICE_NAMES } from '../voiceNames';
 
@@ -93,6 +94,14 @@ check(blocked.length === 0, `every voice on screen is allowed by the server (${b
 
 // Side fly-in rows start from the spoken line, one row per phrase
 check(sideRows('the deposit alert, the date, the blocking —') === 'the deposit alert\nthe date\nthe blocking', 'a line splits into one row per phrase at commas and dashes');
+
+// A script one line over the cap joins one pair, not every line
+const longScript = Array.from({ length: 24 }, (_, i) => `This is spoken line number ${i + 1} of the story.`);
+longScript.splice(10, 0, 'He pay am.');
+const longScenes = generateScenesFromScript(longScript.join('\n'));
+check(longScenes.length === 24, `a script one line over 24 still gets 24 scenes (${longScenes.length})`);
+check(/number 10 of the story\. He pay am\.$/.test(longScenes[9].voiceLine), 'the short line joins the line before it');
+check(longScenes[23].voiceLine === 'This is spoken line number 24 of the story.', 'the closing line keeps its own scene');
 
 console.log(fails.length ? `\n${fails.length} FAILED` : '\ntiming: all checks passed');
 process.exit(fails.length ? 1 : 0);
