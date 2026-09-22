@@ -65,7 +65,7 @@ const apply = async () => {
 const playButton = () =>
   page.locator('button').filter({ has: page.locator('svg.lucide-play') }).filter({ hasNotText: /Generate/ }).first();
 const pauseButton = () => page.locator('button').filter({ has: page.locator('svg.lucide-pause') }).first();
-const sceneCount = async () => parseInt((await page.locator('text=/\\d+ of 24 scenes/').first().textContent()) || '0');
+const sceneCount = async () => parseInt((await page.locator('text=/\\d+ of \\d+ scenes/').first().textContent()) || '0');
 const creamShare = () =>
   page.evaluate(() => {
     const c = document.querySelector('canvas');

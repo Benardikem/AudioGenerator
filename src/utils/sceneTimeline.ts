@@ -8,7 +8,7 @@ import { AdvertScene } from '../types';
  * scenes as it needs, and each lasts in proportion to its own spoken line.
  */
 
-export const MAX_SCENES = 24;
+export const MAX_SCENES = 40;
 
 const BRAND_TYPES = ['logo', 'ui_search', 'ui_review', 'end_card'];
 
