@@ -270,7 +270,11 @@ await page.getByRole('button', { name: 'Text (side fly-in)' }).click();
 await page.waitForTimeout(300);
 const rowsText = await page.getByPlaceholder('Type your headline here').inputValue().catch(() => '');
 check(rowsText === 'the deposit alert\nthe date\nthe blocking', 'side fly-in starts with one row per phrase of the line');
-await page.getByRole('button', { name: 'Right', exact: true }).click();
+await page.getByRole('button', { name: 'All from the right' }).click();
+await page.getByPlaceholder('0.2').fill('1.5');
+await page.getByPlaceholder('Auto').fill('0.5');
+const plan = await page.locator('#fly-plan').innerText();
+check(/Row 1.*from the right, at 1\.5s/.test(plan) && /Row 3.*at 2\.5s/.test(plan), 'the row plan shows each row, its side and when it arrives');
 await apply();
 await toPreview();
 const ink = () =>
@@ -289,10 +293,12 @@ await page.locator('text=/the deposit alert/').first().click();
 await page.waitForTimeout(800);
 const inkBefore = await ink();
 await playButton().click();
+for (let i = 0; i < 40 && (await readTime()) < 1; i++) await page.waitForTimeout(100);
+const inkWaiting = await ink();
 // Wait until the scene has really played for a few seconds, however slowly playback starts
 for (let i = 0; i < 40 && (await readTime()) < 4; i++) await page.waitForTimeout(250);
 const inkAfter = await ink();
-check(inkBefore < 5 && inkAfter > 40, `side fly-in rows arrive while the scene plays (${inkBefore} → ${inkAfter})`);
+check(inkBefore < 5 && inkWaiting < 5 && inkAfter > 40, `side fly-in rows wait, then arrive while the scene plays (${inkBefore} → ${inkWaiting} → ${inkAfter})`);
 
 check(pageErrors.length === 0, `no errors in the page (${pageErrors.slice(0, 2).join(' | ')})`);
 

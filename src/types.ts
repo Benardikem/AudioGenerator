@@ -114,6 +114,10 @@ export interface AdvertScene {
   textBackground?: 'cream' | 'photo';
   /** type 'text_side': the side each row flies in from. Default: alternate, left first. */
   flyFrom?: 'left' | 'right' | 'alternate';
+  /** type 'text_side': seconds into the scene before the first row arrives. Default 0.2. */
+  flyDelay?: number;
+  /** type 'text_side': seconds between one row and the next. Unset: spread across the scene. */
+  flyGap?: number;
   /** A video clip that plays as this scene's background instead of imageSrc. */
   videoSrc?: string;
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */

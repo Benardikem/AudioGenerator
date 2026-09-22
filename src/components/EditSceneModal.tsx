@@ -57,6 +57,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [headline, setHeadline] = useState('');
   const [textBackground, setTextBackground] = useState<'cream' | 'photo'>('cream');
   const [flyFrom, setFlyFrom] = useState<'left' | 'right' | 'alternate'>('alternate');
+  const [flyDelay, setFlyDelay] = useState('');
+  const [flyGap, setFlyGap] = useState('');
   const [videoSrc, setVideoSrc] = useState('');
   const [clipUploading, setClipUploading] = useState(false);
   const [clipError, setClipError] = useState<string | null>(null);
@@ -82,6 +84,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setHeadline(scene.headline || '');
       setTextBackground(scene.textBackground || 'cream');
       setFlyFrom(scene.flyFrom || 'alternate');
+      setFlyDelay(scene.flyDelay !== undefined ? String(scene.flyDelay) : '');
+      setFlyGap(scene.flyGap !== undefined ? String(scene.flyGap) : '');
       setVideoSrc(scene.videoSrc || '');
       setClipFit(scene.clipFit || 'slow');
       setLengthSeconds(scene.lengthSeconds ? String(scene.lengthSeconds) : '');
@@ -224,6 +228,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       type: sceneType,
       ...(isTextStyle ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
       flyFrom: sceneType === 'text_side' && flyFrom !== 'alternate' ? flyFrom : undefined,
+      flyDelay: sceneType === 'text_side' && flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : undefined,
+      flyGap: sceneType === 'text_side' && flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : undefined,
     });
     onClose();
   };
@@ -963,7 +969,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 <textarea
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
-                  rows={2}
+                  rows={Math.min(6, Math.max(2, headline.split('\n').length))}
                   placeholder="Type your headline here"
                   className="w-full p-3 text-sm bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614] font-semibold"
                 />
@@ -995,28 +1001,84 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 </div>
               </div>
               {sceneType === 'text_side' && (
-                <div>
-                  <label className="block text-xs font-bold text-[#181614] mb-1">Rows fly in from</label>
-                  <div className="flex gap-2">
-                    {([
-                      ['alternate', 'Left, then right'],
-                      ['left', 'Left'],
-                      ['right', 'Right'],
-                    ] as const).map(([id, label]) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => setFlyFrom(id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                          flyFrom === id
-                            ? 'bg-[#181614] border-[#181614] text-white'
-                            : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614]'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-[#181614] mb-1">Which side each row comes from</label>
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        ['alternate', 'Take turns: left, right, left…'],
+                        ['left', 'All from the left'],
+                        ['right', 'All from the right'],
+                      ] as const).map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setFlyFrom(id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                            flyFrom === id
+                              ? 'bg-[#181614] border-[#181614] text-white'
+                              : 'bg-white border-[#EAE3D4] text-[#6B6256] hover:text-[#181614]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="block text-xs font-bold text-[#181614] mb-1">Wait before row 1 (seconds)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={flyDelay}
+                        onChange={(e) => setFlyDelay(e.target.value)}
+                        placeholder="0.2"
+                        className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-xs font-bold text-[#181614] mb-1">Gap between rows (seconds)</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={flyGap}
+                        onChange={(e) => setFlyGap(e.target.value)}
+                        placeholder="Auto"
+                        className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                      />
+                    </label>
+                  </div>
+                  {/* What will happen, row by row, so the choices above never need explaining */}
+                  <ol id="fly-plan" className="text-[11px] text-[#6B6256] space-y-0.5 bg-white border border-[#EAE3D4] rounded-xl p-2">
+                    {headline
+                      .split('\n')
+                      .map((r) => r.replace(/\*/g, '').trim())
+                      .filter(Boolean)
+                      .map((row, i) => {
+                        const fromLeft = flyFrom === 'left' || (flyFrom === 'alternate' && i % 2 === 0);
+                        const first = flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : 0.2;
+                        const gap = flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : null;
+                        return (
+                          <li key={i}>
+                            <span className="font-bold text-[#181614]">
+                              {fromLeft ? '→' : '←'} Row {i + 1}
+                            </span>{' '}
+                            “{row}” — from the {fromLeft ? 'left' : 'right'},{' '}
+                            {gap === null
+                              ? i === 0
+                                ? `at ${first.toFixed(1)}s`
+                                : 'next in turn'
+                              : `at ${(first + i * gap).toFixed(1)}s`}
+                          </li>
+                        );
+                      })}
+                    {flyGap.trim() === '' && (
+                      <li className="pt-1">Gap left on Auto: the rows are spread out over the scene's length.</li>
+                    )}
+                  </ol>
                 </div>
               )}
             </div>

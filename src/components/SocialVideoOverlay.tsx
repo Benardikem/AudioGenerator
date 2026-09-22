@@ -765,8 +765,14 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         }
 
         // Sideways rows: when each arrives, and from which side.
-        const rowGap = rows.length > 1 ? Math.max(0.3, Math.min(1.2, (sceneDur * 0.8 - 0.3) / rows.length)) : 0;
-        const rowDelay = (row: number) => 0.2 + row * rowGap;
+        const firstAt = Math.max(0, activeScene.flyDelay ?? 0.2);
+        const rowGap =
+          activeScene.flyGap !== undefined
+            ? Math.max(0, activeScene.flyGap)
+            : rows.length > 1
+            ? Math.max(0.3, Math.min(1.2, (sceneDur * 0.8 - firstAt - 0.1) / rows.length))
+            : 0;
+        const rowDelay = (row: number) => firstAt + row * rowGap;
         const fromLeft = (row: number) =>
           activeScene.flyFrom === 'left' ? true : activeScene.flyFrom === 'right' ? false : row % 2 === 0;
         const lastLanded = sideways ? rowDelay(rows.length - 1) + 0.55 : 0.35 + lines.length * 0.14 + 0.45;
