@@ -105,7 +105,7 @@ export interface AdvertScene {
   voiceLine: string;
   visualPrompt: string;
   imageSrc?: string;
-  type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card' | 'text' | 'text_side';
+  type: 'photo' | 'logo' | 'ui_search' | 'ui_review' | 'end_card' | 'text' | 'text_side' | 'chat';
   /** type 'text' and 'text_side': small uppercase label that fades in above the headline. */
   eyebrow?: string;
   /** type 'text' and 'text_side': one row per line; wrap words in *stars* to make them gold. */
@@ -118,6 +118,8 @@ export interface AdvertScene {
   flyDelay?: number;
   /** type 'text_side': seconds between one row and the next. Unset: spread across the scene. */
   flyGap?: number;
+  /** type 'chat': who the messages are with, shown at the top of the conversation. Uses `eyebrow`.
+   * The messages themselves are one per line of `headline`; a line starting with > is their reply. */
   /** type 'text_side': seconds after the picture is in before the small label shows. Unset: with row 1. */
   labelDelay?: number;
   /** A video clip that plays as this scene's background instead of imageSrc. */

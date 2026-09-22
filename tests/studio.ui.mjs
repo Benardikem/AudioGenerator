@@ -624,6 +624,40 @@ const bScenes = b ? (typeof b.scenes === 'string' ? JSON.parse(b.scenes) : b.sce
 check(bScenes.length === 3 && bScenes[0].voiceLine.startsWith('My cousin Chidi'), 'the new ad gets its own storyboard from its script');
 check((await page.locator('input[type="text"]').first().inputValue()) === 'Story B', 'the studio moves on to the new ad');
 
+// Chat scenes: messages arrive one after another, theirs on the left
+await newAd('Chat scene', ['Every week, he go message dem: "Oga, any update?" And dem go reply: "Embassy still dey process am."', 'Second line here.']);
+await editScene(1);
+await page.getByRole('button', { name: 'Chat messages' }).click();
+await page.waitForTimeout(300);
+const chatRows = await page.getByPlaceholder(/Oga, any update/).inputValue();
+check(chatRows === 'Oga, any update?\n> Embassy still dey process am.', `the quoted words become the messages (${JSON.stringify(chatRows)})`);
+await page.getByPlaceholder('e.g. Canada Visa Experts').fill('Canada Visa Experts');
+await page.getByPlaceholder('0.2').fill('1');
+await page.getByPlaceholder('Auto').fill('1.5');
+await apply();
+await toPreview();
+const chatInk = () =>
+  page.evaluate(() => {
+    const c = document.querySelector('canvas');
+    const g = c.getContext('2d');
+    let dark = 0;
+    for (let x = 0.12; x < 0.88; x += 0.02)
+      for (let y = 0.3; y < 0.75; y += 0.02) {
+        const d = g.getImageData(Math.round(c.width * x), Math.round(c.height * y), 1, 1).data;
+        if (d[0] < 90 && d[1] < 90 && d[2] < 90) dark++;
+      }
+    return dark;
+  });
+await page.locator('text=/Every week/').first().click();
+await page.waitForTimeout(900);
+const chatBefore = await chatInk();
+await playButton().click();
+for (let i = 0; i < 40 && (await readTime()) < 5; i++) await page.waitForTimeout(250);
+const chatAfter = await chatInk();
+await pauseButton().click();
+check(chatAfter > chatBefore * 2 && chatAfter > 25, `chat messages arrive as the scene plays (${chatBefore} → ${chatAfter})`);
+await page.locator('canvas').first().screenshot({ path: process.env.CHATSHOT || 'tests/.deps/chat.png' }).catch(() => {});
+
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();
 check((await page.locator('text=/Captions: (ON|OFF)/').count()) === 0, 'the preview has no captions switch');

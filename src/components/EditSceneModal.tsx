@@ -208,7 +208,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     }
   };
 
-  const isTextStyle = sceneType === 'text' || sceneType === 'text_side';
+  const isTextStyle = sceneType === 'text' || sceneType === 'text_side' || sceneType === 'chat';
+  const isChat = sceneType === 'chat';
 
   const handleSave = () => {
     onSave({
@@ -230,8 +231,8 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       type: sceneType,
       ...(isTextStyle ? { eyebrow: eyebrow.trim(), headline: headline.trim(), textBackground } : {}),
       flyFrom: sceneType === 'text_side' && flyFrom !== 'alternate' ? flyFrom : undefined,
-      flyDelay: sceneType === 'text_side' && flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : undefined,
-      flyGap: sceneType === 'text_side' && flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : undefined,
+      flyDelay: (sceneType === 'text_side' || isChat) && flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : undefined,
+      flyGap: (sceneType === 'text_side' || isChat) && flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : undefined,
       labelDelay:
         sceneType === 'text_side' && eyebrow.trim() && labelDelay.trim() !== '' && Number(labelDelay) >= 0
           ? Number(labelDelay)
@@ -473,6 +474,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                 { id: 'photo', label: 'Photo' },
                 { id: 'text', label: 'Text (fly-in)' },
                 { id: 'text_side', label: 'Text (side fly-in)' },
+                { id: 'chat', label: 'Chat messages' },
                 { id: 'logo', label: 'LegitAfrica: tell them' },
                 { id: 'ui_search', label: 'LegitAfrica: search & review' },
                 { id: 'ui_review', label: 'LegitAfrica: honest reviews' },
@@ -485,6 +487,13 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     setSceneType(opt.id);
                     // Start the rows off from the spoken line, split at its commas and dashes.
                     if (opt.id === 'text_side' && !headline.trim()) setHeadline(sideRows(voiceLine));
+                    // Chat: quoted speech in the spoken line becomes the messages, the first mine.
+                    if (opt.id === 'chat' && !headline.trim()) {
+                      const quotes = (voiceLine.match(/[\u201c"']([^\u201d"']{2,})[\u201d"']/g) || []).map((q) =>
+                        q.replace(/^[\u201c"']|[\u201d"']$/g, '').trim()
+                      );
+                      setHeadline(quotes.map((q, i) => (i % 2 ? `> ${q}` : q)).join('\n'));
+                    }
                   }}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                     sceneType === opt.id
@@ -963,26 +972,36 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
           {isTextStyle && (
             <div className="bg-[#FBF8F1] p-3.5 rounded-2xl border border-[#E8A317]/40 space-y-3">
               <div>
-                <label className="block text-xs font-bold text-[#181614] mb-1">Small label (optional)</label>
+                <label className="block text-xs font-bold text-[#181614] mb-1">
+                  {isChat ? 'Chat with (optional)' : 'Small label (optional)'}
+                </label>
                 <input
                   value={eyebrow}
                   onChange={(e) => setEyebrow(e.target.value)}
                   maxLength={40}
-                  placeholder="e.g. WHAT HAPPENED NEXT"
+                  placeholder={isChat ? 'e.g. Canada Visa Experts' : 'e.g. WHAT HAPPENED NEXT'}
                   className="w-full p-2.5 text-xs bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614]"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-[#181614] mb-1">Headline</label>
+                <label className="block text-xs font-bold text-[#181614] mb-1">{isChat ? 'Messages' : 'Headline'}</label>
                 <textarea
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
                   rows={Math.min(6, Math.max(2, headline.split('\n').length))}
-                  placeholder="Type your headline here"
+                  placeholder={isChat ? 'Oga, any update?\n> Embassy still dey process am.' : 'Type your headline here'}
                   className="w-full p-3 text-sm bg-white border border-[#EAE3D4] rounded-xl focus:ring-2 focus:ring-[#E8A317] outline-hidden text-[#181614] font-semibold"
                 />
                 <p className="text-[11px] text-[#6B6256] mt-1 leading-snug">
-                  One row per line, each flying in after the one before{sceneType === 'text_side' ? ', spaced across the spoken line' : ''}.{' '}
+                  {isChat ? (
+                    <>
+                      One message per line, arriving one after another. Start a line with{' '}
+                      <span className="font-mono font-semibold text-[#181614]">&gt;</span> for their reply, shown on the
+                      left.
+                    </>
+                  ) : (
+                    <>One row per line, each flying in after the one before{sceneType === 'text_side' ? ', spaced across the spoken line' : ''}.</>
+                  )}{' '}
                   <span className="font-mono font-semibold text-[#181614]">*stars*</span> make a word gold:{' '}
                   <span className="font-mono text-[#181614]">
                     <span className="text-[#C6860C]">*Gone*</span> in one Saturday.
@@ -1008,8 +1027,9 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   ))}
                 </div>
               </div>
-              {sceneType === 'text_side' && (
+              {(sceneType === 'text_side' || isChat) && (
                 <div className="space-y-2.5">
+                  {!isChat && (
                   <div>
                     <label className="block text-xs font-bold text-[#181614] mb-1">Which side each row comes from</label>
                     <div className="flex flex-wrap gap-2">
@@ -1033,9 +1053,12 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                       ))}
                     </div>
                   </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block">
-                      <span className="block text-xs font-bold text-[#181614] mb-1">Wait before row 1 (seconds)</span>
+                      <span className="block text-xs font-bold text-[#181614] mb-1">
+                        {isChat ? 'Wait before message 1 (seconds)' : 'Wait before row 1 (seconds)'}
+                      </span>
                       <span className="block text-[10px] text-[#6B6256] -mt-0.5 mb-1">counted from when the picture is fully in</span>
                       <input
                         type="number"
@@ -1048,7 +1071,9 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                       />
                     </label>
                     <label className="block">
-                      <span className="block text-xs font-bold text-[#181614] mb-1">Gap between rows (seconds)</span>
+                      <span className="block text-xs font-bold text-[#181614] mb-1">
+                        {isChat ? 'Gap between messages (seconds)' : 'Gap between rows (seconds)'}
+                      </span>
                       <input
                         type="number"
                         min={0}
@@ -1084,12 +1109,16 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     const first = flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : 0.2;
                     const gap = flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : null;
                     const sceneLen = Number(lengthSeconds) > 0 ? Number(lengthSeconds) : null;
-                    const side =
-                      flyFrom === 'alternate' ? 'taking turns from the left and right' : `all from the ${flyFrom}`;
+                    const side = isChat
+                      ? 'in the order written'
+                      : flyFrom === 'alternate'
+                      ? 'taking turns from the left and right'
+                      : `all from the ${flyFrom}`;
                     const last = gap === null ? null : first + (count - 1) * gap;
                     return (
                       <p id="fly-plan" className="text-[11px] text-[#6B6256] bg-white border border-[#EAE3D4] rounded-xl p-2 leading-snug">
-                        {count} row{count === 1 ? '' : 's'}, {side}. The first arrives{' '}
+                        {count} {isChat ? 'message' : 'row'}
+                        {count === 1 ? '' : 's'}, {side}. The first arrives{' '}
                         <span className="font-bold text-[#181614]">{first.toFixed(1)}s</span> after the picture is in
                         {count > 1 && (
                           gap === null ? (
@@ -1105,12 +1134,12 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                         {eyebrow.trim() &&
                           (labelDelay.trim() !== '' && Number(labelDelay) >= 0 ? (
                             <>
-                              {' '}The small label arrives{' '}
+                              {' '}The {isChat ? 'chat name' : 'small label'} arrives{' '}
                               <span className="font-bold text-[#181614]">{Number(labelDelay).toFixed(1)}s</span> after the
                               picture is in.
                             </>
                           ) : (
-                            <> The small label arrives with row 1.</>
+                            <> The {isChat ? 'chat name shows with message 1' : 'small label arrives with row 1'}.</>
                           ))}
                         {sceneLen !== null && <> The scene lasts {sceneLen.toFixed(1)}s.</>}
                       </p>

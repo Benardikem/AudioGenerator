@@ -682,6 +682,139 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       };
 
       // ----------------------------------------------------
+      // CHAT: the conversation itself, drawn as phone message bubbles that arrive one after
+      // another. The adverts keep quoting chats ("Oga, any update?" and the reply), and a
+      // screenshot cannot be read at arm's length on a phone.
+      // ----------------------------------------------------
+      const drawChat = () => {
+        const sceneDur = span.end - span.start;
+        const t = sceneProgress * sceneDur;
+        const FONT = '-apple-system, "SF Pro Display", "Helvetica Neue", Inter, Arial, sans-serif';
+        const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+        const easeOut = (v: number) => 1 - Math.pow(1 - clamp01(v), 4);
+        const onPhoto = activeScene.textBackground === 'photo';
+
+        if (onPhoto) {
+          const img = getSceneImage(activeScene, '/scenes/scene1.jpg');
+          if (videoReady(activeVideo)) drawCoverImage(activeVideo);
+          else if (img && img.complete && img.naturalWidth) {
+            const move = pictureMotion();
+            drawCoverImage(img, 1, move.panY, move.scale);
+          } else {
+            ctx.fillStyle = BRAND_COLORS.nearBlack;
+            ctx.fillRect(0, 0, W, H);
+          }
+          ctx.fillStyle = 'rgba(24, 22, 20, 0.64)';
+          ctx.fillRect(0, 0, W, H);
+        } else {
+          ctx.fillStyle = BRAND_COLORS.cream;
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        // Each line is one message; a line starting with > is their reply, on the left.
+        const messages = (activeScene.headline || activeScene.voiceLine || '')
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .map((l) => (l.startsWith('>') ? { text: l.slice(1).trim(), mine: false } : { text: l, mine: true }));
+        if (!messages.length) return;
+
+        const padX = 84;
+        const panelX = padX;
+        const panelW = W - padX * 2;
+        const size = messages.length > 4 ? 34 : 40;
+        const lineH = size * 1.25;
+        const bubblePad = 30;
+        const maxBubbleW = panelW * 0.76;
+        ctx.font = `500 ${size}px ${FONT}`;
+        const laidOut = messages.map((m) => {
+          const lines = wrapCanvasText(m.text, maxBubbleW - bubblePad * 2);
+          const width = Math.min(
+            maxBubbleW,
+            Math.max(...lines.map((l) => ctx.measureText(l).width)) + bubblePad * 2
+          );
+          return { ...m, lines, width, height: lines.length * lineH + bubblePad * 1.6 };
+        });
+
+        const headerH = activeScene.eyebrow?.trim() ? 130 : 0;
+        const gapY = 22;
+        const bodyH = laidOut.reduce((sum, b) => sum + b.height + gapY, 0);
+        const panelH = headerH + bodyH + 40;
+        const panelY = Math.max(150, (H - panelH) / 2 - 70);
+
+        // The phone panel behind the conversation
+        ctx.save();
+        ctx.fillStyle = onPhoto ? 'rgba(251, 248, 241, 0.97)' : '#FFFFFF';
+        ctx.strokeStyle = BRAND_COLORS.borders;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(panelX, panelY, panelW, panelH, 44);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        const who = (activeScene.eyebrow || '').trim();
+        if (who) {
+          ctx.save();
+          ctx.fillStyle = BRAND_COLORS.sand;
+          ctx.beginPath();
+          ctx.roundRect(panelX, panelY, panelW, headerH, [44, 44, 0, 0] as any);
+          ctx.fill();
+          ctx.fillStyle = BRAND_COLORS.gold;
+          ctx.beginPath();
+          ctx.arc(panelX + 78, panelY + headerH / 2, 40, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = BRAND_COLORS.nearBlack;
+          ctx.font = `800 40px ${FONT}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(who.slice(0, 1).toUpperCase(), panelX + 78, panelY + headerH / 2 + 14);
+          ctx.textAlign = 'left';
+          ctx.font = `700 36px ${FONT}`;
+          ctx.fillText(who, panelX + 142, panelY + headerH / 2 - 2);
+          ctx.fillStyle = BRAND_COLORS.warmGrey;
+          ctx.font = `500 24px ${FONT}`;
+          ctx.fillText('online', panelX + 142, panelY + headerH / 2 + 34);
+          ctx.strokeStyle = BRAND_COLORS.borders;
+          ctx.beginPath();
+          ctx.moveTo(panelX, panelY + headerH);
+          ctx.lineTo(panelX + panelW, panelY + headerH);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const firstAt = (currentSceneIndex > 0 ? SCENE_DISSOLVE : 0) + Math.max(0, activeScene.flyDelay ?? 0.4);
+        const gap =
+          activeScene.flyGap !== undefined
+            ? Math.max(0, activeScene.flyGap)
+            : Math.max(0.5, Math.min(1.6, (sceneDur * 0.8 - firstAt) / Math.max(1, messages.length)));
+
+        let y = panelY + headerH + 28;
+        laidOut.forEach((b, i) => {
+          const p = easeOut((t - (firstAt + i * gap)) / 0.45);
+          if (p <= 0) return;
+          const x = b.mine ? panelX + panelW - 36 - b.width : panelX + 36;
+          const top = y + (1 - p) * 26;
+          ctx.save();
+          ctx.globalAlpha = p;
+          ctx.fillStyle = b.mine ? '#D9F2C6' : BRAND_COLORS.sand;
+          ctx.strokeStyle = b.mine ? '#BFE2A6' : BRAND_COLORS.borders;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(x, top, b.width, b.height, b.mine ? [30, 30, 8, 30] : ([30, 30, 30, 8] as any));
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = BRAND_COLORS.nearBlack;
+          ctx.font = `500 ${size}px ${FONT}`;
+          ctx.textAlign = 'left';
+          b.lines.forEach((line, li) => {
+            ctx.fillText(line, x + bubblePad, top + bubblePad + (li + 0.82) * lineH);
+          });
+          ctx.restore();
+          y += b.height + gapY;
+        });
+      };
+
+      // ----------------------------------------------------
       // TEXT (FLY-IN): any scene can be a headline card in the style of the "Check before you pay"
       // promo. A label fades in, then each line rises from behind its own edge, one after another.
       // ----------------------------------------------------
@@ -853,7 +986,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         if ('letterSpacing' in ctx) (ctx as any).letterSpacing = '0px';
       };
 
-      if (activeScene?.type === 'text' || activeScene?.type === 'text_side') {
+      if (activeScene?.type === 'chat') {
+        drawChat();
+      } else if (activeScene?.type === 'text' || activeScene?.type === 'text_side') {
         drawFlyInText();
       }
 

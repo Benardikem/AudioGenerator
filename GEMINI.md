@@ -56,7 +56,9 @@ in production the server refuses to start without it.
 - A scene is drawn from its `type`, never from its position: `photo`, `text` (a fly-in headline
   card with eyebrow, `*gold*` words, cream or photo background), `text_side` (the same card, but
   each row slides in from the left or right — `flyFrom` — one after another, spaced across the
-  spoken line; rows default to the line split at commas and dashes), and the LegitAfrica screens
+  spoken line; rows default to the line split at commas and dashes), `chat` (phone message
+  bubbles, one per line of `headline`, a line starting with `>` being their reply on the left,
+  with `eyebrow` as who the chat is with), and the LegitAfrica screens
   `logo`, `ui_search`, `ui_review`, `end_card`.
 - Ads saved before this change have no `layoutVersion` and were drawn by position. `normalizeScenes`
   converts them on opening so they still look the same. Do not remove it.
