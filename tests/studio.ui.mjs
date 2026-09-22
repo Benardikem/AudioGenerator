@@ -417,6 +417,63 @@ const pictureIn = frames.find(([, l]) => l <= darkest + 1.5)?.[0] ?? 0;
 const firstText = frames.find(([t, , x]) => t > pictureIn && x > 20)?.[0] ?? 0;
 check(firstText - pictureIn >= 500, `after a scene change, row 1 waits for the picture to be in (${Math.round(firstText - pictureIn)}ms after)`);
 
+// Scene 20 of the wedding ad: a small label as well as rows, taking turns, 1.1s wait, 1.4s gap.
+// The label came up at once, so the whole scene looked as if it ignored the wait.
+await newAd('Fly-in with a label', [
+  'Three months before the day, she find one makeup and gele vendor for Instagram.',
+  'Before you pay deposit to any vendor, Instagram, WhatsApp, anywhere, check them well well first.',
+  'Dem collect deposit.',
+]);
+await editScene(1);
+await page.getByPlaceholder('e.g. 7').fill('3');
+await apply();
+await editScene(2);
+await page.getByRole('button', { name: 'Text (side fly-in)' }).click();
+await page.getByRole('button', { name: 'Over my photo' }).click();
+await page.waitForTimeout(300);
+await page.locator('input[type="file"][accept*="image"]').setInputFiles(path.join(here, '../public/scenes/scene1.jpg'));
+await page.waitForTimeout(2200);
+await page.getByPlaceholder('e.g. WHAT HAPPENED NEXT').fill('BEFORE YOU PAY ANY DEPOSIT');
+await page.getByPlaceholder('Type your headline here').fill('Instagram\nWhatsApp\n*anywhere*');
+await page.getByPlaceholder('0.2').fill('1.1');
+await page.getByPlaceholder('Auto').fill('1.4');
+await page.getByPlaceholder('e.g. 7').fill('6.9');
+check(/The small label arrives with row 1/.test(await page.locator('#fly-plan').innerText()), 'the plan says the label waits with row 1');
+await apply();
+await toPreview();
+await page.locator('#preview-scene-list [data-scene-index="0"]').click();
+await page.waitForTimeout(1000);
+const labelTrace = page.evaluate(
+  () =>
+    new Promise((res) => {
+      const c = document.querySelector('canvas');
+      const g = c.getContext('2d', { willReadFrequently: true });
+      const out = [];
+      const t0 = performance.now();
+      const tick = () => {
+        const now = performance.now() - t0;
+        const d = g.getImageData(0, Math.round(c.height * 0.12), c.width, Math.round(c.height * 0.64)).data;
+        let lum = 0, text = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4 * 97) {
+          n++;
+          lum += d[i] + d[i + 1] + d[i + 2];
+          if ((d[i] > 160 && d[i + 1] > 150 && d[i + 2] > 140) || (d[i] > 200 && d[i + 1] > 130 && d[i + 2] < 90)) text++;
+        }
+        out.push([now, lum / n / 3, text]);
+        if (now < 7000) requestAnimationFrame(tick);
+        else res(out);
+      };
+      requestAnimationFrame(tick);
+    })
+);
+await playButton().click();
+const labelFrames = await labelTrace;
+await pauseButton().click();
+const labelDarkest = Math.min(...labelFrames.map(([, l]) => l));
+const labelPictureIn = labelFrames.find(([, l]) => l <= labelDarkest + 1.5)?.[0] ?? 0;
+const labelFirst = labelFrames.find(([t, , x]) => t > labelPictureIn && x > 8)?.[0] ?? 0;
+check(labelFirst - labelPictureIn >= 1000, `a scene with a small label keeps all its text back for the wait (first text ${Math.round(labelFirst - labelPictureIn)}ms after the picture)`);
+
 // The scene list beside the preview follows playback, and there is no second row of scene buttons
 await newAd('List follows', Array.from({ length: 12 }, (_, i) => `Scene number ${i + 1} line.`));
 await toPreview();

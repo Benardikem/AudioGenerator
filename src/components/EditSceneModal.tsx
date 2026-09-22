@@ -1079,6 +1079,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                           )
                         )}
                         {count === 1 && '.'}
+                        {eyebrow.trim() && <> The small label arrives with row 1.</>}
                         {sceneLen !== null && <> The scene lasts {sceneLen.toFixed(1)}s.</>}
                       </p>
                     );

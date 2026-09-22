@@ -762,8 +762,13 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         const blockH = eyebrowH + lines.length * lineH + 46;
         let y = Math.max(200, (H - blockH) / 2 - 60); // sit a little high, clear of the captions
 
+        // Side fly-in: the wait before row 1 counts from when the picture is fully in (counted
+        // from the start of the dissolve, a 0.6s wait put row 1 just 0.2s behind the photo), and
+        // the small label waits too — shown at once, it made scene 20 look as if the wait did
+        // nothing.
+        const firstAt = (currentSceneIndex > 0 ? SCENE_DISSOLVE : 0) + Math.max(0, activeScene.flyDelay ?? 0.2);
         if (eyebrow) {
-          const p = easeOut((t - 0.12) / 0.5);
+          const p = easeOut((t - (sideways ? firstAt : 0.12)) / 0.5);
           ctx.save();
           ctx.globalAlpha = p;
           ctx.font = `800 30px ${FONT}`;
@@ -776,9 +781,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         }
 
         // Sideways rows: when each arrives, and from which side.
-        // The wait counts from when the picture is fully in: counted from the start of the
-        // dissolve, a 0.6s wait put the first row 0.2s behind the photo and they looked as one.
-        const firstAt = (currentSceneIndex > 0 ? SCENE_DISSOLVE : 0) + Math.max(0, activeScene.flyDelay ?? 0.2);
         const rowGap =
           activeScene.flyGap !== undefined
             ? Math.max(0, activeScene.flyGap)
