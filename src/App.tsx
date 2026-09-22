@@ -34,7 +34,7 @@ import { StoryboardEditor } from './components/StoryboardEditor';
 import { CampaignArchiveView } from './components/CampaignArchiveView';
 import { generateScenesFromScript } from './utils/sceneGenerator';
 import { normalizeScenes, stampScenes, estimateDuration } from './utils/sceneTimeline';
-import { GeneratedCommercial, CommercialPreset, AdvertScene, AspectRatio } from './types';
+import { GeneratedCommercial, AdvertScene, AspectRatio } from './types';
 import { BRAND_COLORS, ADVERT_SCENES } from './data/advertScenes';
 import {
   CommercialRecord,
@@ -375,15 +375,6 @@ export default function App() {
     }
   };
 
-  const handleApplyPreset = (preset: CommercialPreset) => {
-    setScript(preset.script);
-    setSelectedVoice(preset.suggestedVoice);
-    setSelectedStyle(preset.suggestedStyle);
-    const matchedVoice = VOICE_OPTIONS.find((v) => v.id === preset.suggestedVoice);
-    if (matchedVoice?.defaultPitch) {
-      setSelectedTimbre(matchedVoice.defaultPitch);
-    }
-  };
 
   // Whether the open ad matches what's saved. Drives the status next to its name, the Save
   // button, and the warning when leaving with unsaved work.
@@ -706,7 +697,6 @@ export default function App() {
               <ScriptEditor
                 script={script}
                 onChangeScript={setScript}
-                onApplyPreset={handleApplyPreset}
               />
             </div>
 

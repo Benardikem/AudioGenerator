@@ -543,6 +543,16 @@ await page.waitForTimeout(900);
 const playing = parseInt(/Scene (\d+) of/.exec((await page.locator('text=/Active: Scene \\d+ of/').first().textContent()) || '')?.[1] || '0') - 1;
 check(playing >= 6 && (await inView(playing)), `the list moves along with playback (scene ${playing + 1} highlighted and in view)`);
 
+// The script screen has nothing that replaces the script in one click
+await newAd('Script safe', ['My own line one.', 'My own line two.']);
+await page.getByRole('button', { name: /Script & Voiceover/i }).first().click();
+await page.waitForTimeout(600);
+check(
+  (await page.locator('[id^="preset-btn-"], #reset-script-btn').count()) === 0 && (await page.locator('text=/Script Formats/').count()) === 0,
+  'the script screen has no sample scripts or Reset to overwrite your script'
+);
+check((await page.locator('#commercial-script-textarea').inputValue()).startsWith('My own line one.'), 'your script is still there');
+
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();
 check((await page.locator('text=/Captions: (ON|OFF)/').count()) === 0, 'the preview has no captions switch');
