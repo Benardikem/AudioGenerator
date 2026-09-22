@@ -65,6 +65,9 @@ interface SocialVideoOverlayProps {
   onBgmChange?: (bgm: string) => void;
 }
 
+/** How long one scene dissolves into the next. */
+const SCENE_DISSOLVE = 0.4;
+
 export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   audioUrl,
   duration,
@@ -761,7 +764,9 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         }
 
         // Sideways rows: when each arrives, and from which side.
-        const firstAt = Math.max(0, activeScene.flyDelay ?? 0.2);
+        // The wait counts from when the picture is fully in: counted from the start of the
+        // dissolve, a 0.6s wait put the first row 0.2s behind the photo and they looked as one.
+        const firstAt = (currentSceneIndex > 0 ? SCENE_DISSOLVE : 0) + Math.max(0, activeScene.flyDelay ?? 0.2);
         const rowGap =
           activeScene.flyGap !== undefined
             ? Math.max(0, activeScene.flyGap)
@@ -1533,8 +1538,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
 
   };
 
-  /** How long one scene dissolves into the next. */
-  const SCENE_DISSOLVE = 0.4;
 
   const drawSceneToCanvas = useCallback((timeToDraw: number) => {
     const canvas = canvasRef.current;

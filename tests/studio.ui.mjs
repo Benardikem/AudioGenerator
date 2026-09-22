@@ -274,7 +274,7 @@ await page.getByRole('button', { name: 'All from the right' }).click();
 await page.getByPlaceholder('0.2').fill('1.5');
 await page.getByPlaceholder('Auto').fill('0.5');
 const plan = await page.locator('#fly-plan').innerText();
-check(/all from the right\. The first arrives 1\.5s into the scene, then one every 0\.5s; the last at 2\.5s/.test(plan), 'the plan says which side and when the rows arrive');
+check(/all from the right\. The first arrives 1\.5s after the picture is in, then one every 0\.5s; the last at 2\.5s/.test(plan), 'the plan says which side and when the rows arrive');
 await apply();
 await toPreview();
 const ink = () =>
@@ -324,7 +324,7 @@ await page.locator('#edit-scene-body').evaluate((el) => (el.scrollTop = el.scrol
 const headerSeen = await page.locator('text=/Edit Scene 1 of/').isVisible();
 check(scrolls && headerSeen, 'its fields scroll while the title stays in view');
 const planLine = await page.locator('#fly-plan').innerText();
-check(/6 rows, all from the left\. The first arrives 3\.0s into the scene, then one every 1\.0s; the last at 8\.0s/.test(planLine), `the plan says it in one line (${planLine.slice(0, 90)})`);
+check(/6 rows, all from the left\. The first arrives 3\.0s after the picture is in, then one every 1\.0s; the last at 8\.0s/.test(planLine), `the plan says it in one line (${planLine.slice(0, 90)})`);
 await apply();
 await page.setViewportSize({ width: 1500, height: 1000 });
 await toPreview();
@@ -359,6 +359,62 @@ check(early.length > 0 && Math.max(...early) < 3, 'nothing flies in before the 3
 check(firstRow.length > 0 && Math.min(...firstRow) > 5, 'the first row is in by 4s');
 check(later.length > 0 && Math.min(...later) > Math.max(...firstRow) * 1.5, 'more rows have arrived by 7s, a second apart');
 check(all.length > 0 && Math.min(...all) >= Math.max(...later), 'all six rows are in by 9s');
+
+// The same scene after another one: the wait counts from when its picture has dissolved fully in,
+// not from the first frame of the dissolve (0.6s from there looked like no wait at all).
+await newAd('Fly-in after a scene', [
+  'Three months before the day, she find one makeup and gele vendor for Instagram.',
+  'The page get plenty bridal fine pictures. Plenty followers. Before and after pictures. Testimonies everywhere.',
+  'Dem collect deposit.',
+]);
+await editScene(1);
+await page.getByPlaceholder('e.g. 7').fill('3');
+await apply();
+await editScene(2);
+await page.getByRole('button', { name: 'Text (side fly-in)' }).click();
+await page.getByRole('button', { name: 'Over my photo' }).click();
+await page.waitForTimeout(300);
+await page.locator('input[type="file"][accept*="image"]').setInputFiles(path.join(here, '../public/scenes/scene1.jpg'));
+await page.waitForTimeout(2200);
+await page.getByPlaceholder('Type your headline here').fill('Plenty\nBridal Pictures.\nTestimonies');
+await page.getByPlaceholder('0.2').fill('0.6');
+await page.getByPlaceholder('Auto').fill('0.3');
+await page.getByPlaceholder('e.g. 7').fill('8');
+await apply();
+await toPreview();
+await page.getByRole('button', { name: '1', exact: true }).first().click();
+await page.waitForTimeout(1000);
+const trace = page.evaluate(
+  () =>
+    new Promise((res) => {
+      const c = document.querySelector('canvas');
+      const g = c.getContext('2d', { willReadFrequently: true });
+      const out = [];
+      const t0 = performance.now();
+      const tick = () => {
+        const now = performance.now() - t0;
+        const d = g.getImageData(0, Math.round(c.height * 0.14), c.width, Math.round(c.height * 0.6)).data;
+        let lum = 0, text = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4 * 97) {
+          n++;
+          lum += d[i] + d[i + 1] + d[i + 2];
+          if (d[i] > 200 && d[i + 1] > 190) text++;
+        }
+        out.push([now, lum / n / 3, text]);
+        if (now < 6000) requestAnimationFrame(tick);
+        else res(out);
+      };
+      requestAnimationFrame(tick);
+    })
+);
+await playButton().click();
+const frames = await trace;
+await playButton().click();
+// The dissolve has finished once the darkened picture stops getting darker
+const darkest = Math.min(...frames.map(([, l]) => l));
+const pictureIn = frames.find(([, l]) => l <= darkest + 1.5)?.[0] ?? 0;
+const firstText = frames.find(([t, , x]) => t > pictureIn && x > 20)?.[0] ?? 0;
+check(firstText - pictureIn >= 500, `after a scene change, row 1 waits for the picture to be in (${Math.round(firstText - pictureIn)}ms after)`);
 
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();

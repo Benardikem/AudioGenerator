@@ -1030,6 +1030,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                   <div className="grid grid-cols-2 gap-2">
                     <label className="block">
                       <span className="block text-xs font-bold text-[#181614] mb-1">Wait before row 1 (seconds)</span>
+                      <span className="block text-[10px] text-[#6B6256] -mt-0.5 mb-1">counted from when the picture is fully in</span>
                       <input
                         type="number"
                         min={0}
@@ -1066,7 +1067,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                     return (
                       <p id="fly-plan" className="text-[11px] text-[#6B6256] bg-white border border-[#EAE3D4] rounded-xl p-2 leading-snug">
                         {count} row{count === 1 ? '' : 's'}, {side}. The first arrives{' '}
-                        <span className="font-bold text-[#181614]">{first.toFixed(1)}s</span> into the scene
+                        <span className="font-bold text-[#181614]">{first.toFixed(1)}s</span> after the picture is in
                         {count > 1 && (
                           gap === null ? (
                             <>, the rest spread out over the scene.</>
