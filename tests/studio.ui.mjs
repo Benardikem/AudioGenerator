@@ -274,7 +274,7 @@ await page.getByRole('button', { name: 'All from the right' }).click();
 await page.getByPlaceholder('0.2').fill('1.5');
 await page.getByPlaceholder('Auto').fill('0.5');
 const plan = await page.locator('#fly-plan').innerText();
-check(/Row 1.*from the right, at 1\.5s/.test(plan) && /Row 3.*at 2\.5s/.test(plan), 'the row plan shows each row, its side and when it arrives');
+check(/all from the right\. The first arrives 1\.5s into the scene, then one every 0\.5s; the last at 2\.5s/.test(plan), 'the plan says which side and when the rows arrive');
 await apply();
 await toPreview();
 const ink = () =>
@@ -299,6 +299,66 @@ const inkWaiting = await ink();
 for (let i = 0; i < 40 && (await readTime()) < 4; i++) await page.waitForTimeout(250);
 const inkAfter = await ink();
 check(inkBefore < 5 && inkWaiting < 5 && inkAfter > 40, `side fly-in rows wait, then arrive while the scene plays (${inkBefore} → ${inkWaiting} → ${inkAfter})`);
+
+// Scene 3 of the wedding ad, as set up by hand: side fly-in over a photo, six rows from the left,
+// a 3s wait before the first and 1s between the rest. The wait and gap must hold on screen.
+await newAd('Fly-in timing', [
+  'The page get plenty bridal fine pictures. Plenty followers. Before and after pictures. Testimonies everywhere, and more words so this line runs long enough to watch.',
+  'Short end.',
+]);
+await page.setViewportSize({ width: 1280, height: 720 });
+await editScene(1);
+await page.getByRole('button', { name: 'Text (side fly-in)' }).click();
+await page.getByRole('button', { name: 'Over my photo' }).click();
+await page.waitForTimeout(300);
+await page.locator('input[type="file"][accept*="image"]').setInputFiles(PHOTO);
+await page.waitForTimeout(2200);
+await page.getByPlaceholder('Type your headline here').fill('*Plenty*\nBridal Pictures.\n14.2k followers.\nBefore/After pictures.\nTestimonies\n*everywhere*');
+await page.getByRole('button', { name: 'All from the left' }).click();
+await page.getByPlaceholder('0.2').fill('3');
+await page.getByPlaceholder('Auto').fill('1');
+const box = await page.locator('#edit-scene-modal').boundingBox();
+check(box && box.y >= 0 && box.y + box.height <= 720, `the scene editor fits a small screen (${Math.round(box?.y ?? -1)} to ${Math.round((box?.y ?? 0) + (box?.height ?? 0))} of 720)`);
+const scrolls = await page.locator('#edit-scene-body').evaluate((el) => el.scrollHeight > el.clientHeight + 10);
+await page.locator('#edit-scene-body').evaluate((el) => (el.scrollTop = el.scrollHeight));
+const headerSeen = await page.locator('text=/Edit Scene 1 of/').isVisible();
+check(scrolls && headerSeen, 'its fields scroll while the title stays in view');
+const planLine = await page.locator('#fly-plan').innerText();
+check(/6 rows, all from the left\. The first arrives 3\.0s into the scene, then one every 1\.0s; the last at 8\.0s/.test(planLine), `the plan says it in one line (${planLine.slice(0, 90)})`);
+await apply();
+await page.setViewportSize({ width: 1500, height: 1000 });
+await toPreview();
+const bright = () =>
+  page.evaluate(() => {
+    const c = document.querySelector('canvas');
+    const g = c.getContext('2d');
+    let n = 0;
+    for (let x = 0.03; x < 0.97; x += 0.015)
+      for (let y = 0.14; y < 0.9; y += 0.012) {
+        const d = g.getImageData(Math.round(c.width * x), Math.round(c.height * y), 1, 1).data;
+        if ((d[0] > 200 && d[1] > 190) || (d[0] > 200 && d[1] > 130 && d[2] < 90)) n++; // cream or gold
+      }
+    return n;
+  });
+await page.locator('text=/The page get plenty/').first().click();
+await page.waitForTimeout(800);
+await playButton().click();
+const samples = [];
+for (let i = 0; i < 44; i++) {
+  samples.push([await readTime(), await bright()]);
+  await page.waitForTimeout(250);
+}
+await playButton().click();
+const at = (lo, hi) => samples.filter(([t]) => t >= lo && t <= hi).map(([, b]) => b);
+const early = at(0, 2);
+const firstRow = at(3.5, 3.5).length ? at(3.5, 3.5) : at(4, 4);
+const later = at(7, 7);
+const all = at(9, 11);
+console.log('     fly-in samples (second:brightness)', samples.map(([t, b]) => `${t}:${b}`).join(' '));
+check(early.length > 0 && Math.max(...early) < 3, 'nothing flies in before the 3s wait is up');
+check(firstRow.length > 0 && Math.min(...firstRow) > 5, 'the first row is in by 4s');
+check(later.length > 0 && Math.min(...later) > Math.max(...firstRow) * 1.5, 'more rows have arrived by 7s, a second apart');
+check(all.length > 0 && Math.min(...all) >= Math.max(...later), 'all six rows are in by 9s');
 
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();

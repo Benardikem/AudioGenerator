@@ -427,8 +427,10 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
     ) : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#181614]/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl border border-[#EAE3D4] my-4 animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-[#181614]/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      {/* Never taller than the screen: the header and buttons stay put and the fields scroll
+          between them. Taller than the screen, a centred box lost its top out of reach. */}
+      <div id="edit-scene-modal" className="bg-white rounded-3xl max-w-5xl w-full max-h-[calc(100dvh-1.5rem)] flex flex-col p-5 sm:p-6 shadow-2xl border border-[#EAE3D4] animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#EAE3D4] pb-3 mb-3">
           <div className="flex items-center gap-3">
@@ -455,7 +457,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
 
         {/* Content Form: what is said and shot on the left, how it is timed and dressed on the
             right, so the whole scene fits one screen instead of a long scroll. */}
-        <div className="grid md:grid-cols-2 gap-x-6 gap-y-3 items-start">
+        <div id="edit-scene-body" className="grid md:grid-cols-2 gap-x-6 gap-y-3 items-start flex-1 min-h-0 overflow-y-auto pr-1 -mr-1">
           <div className="space-y-3">
           {/* 0. Scene style */}
           <div>
@@ -1051,34 +1053,35 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                       />
                     </label>
                   </div>
-                  {/* What will happen, row by row, so the choices above never need explaining */}
-                  <ol id="fly-plan" className="text-[11px] text-[#6B6256] space-y-0.5 bg-white border border-[#EAE3D4] rounded-xl p-2">
-                    {headline
-                      .split('\n')
-                      .map((r) => r.replace(/\*/g, '').trim())
-                      .filter(Boolean)
-                      .map((row, i) => {
-                        const fromLeft = flyFrom === 'left' || (flyFrom === 'alternate' && i % 2 === 0);
-                        const first = flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : 0.2;
-                        const gap = flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : null;
-                        return (
-                          <li key={i}>
-                            <span className="font-bold text-[#181614]">
-                              {fromLeft ? '→' : '←'} Row {i + 1}
-                            </span>{' '}
-                            “{row}” — from the {fromLeft ? 'left' : 'right'},{' '}
-                            {gap === null
-                              ? i === 0
-                                ? `at ${first.toFixed(1)}s`
-                                : 'next in turn'
-                              : `at ${(first + i * gap).toFixed(1)}s`}
-                          </li>
-                        );
-                      })}
-                    {flyGap.trim() === '' && (
-                      <li className="pt-1">Gap left on Auto: the rows are spread out over the scene's length.</li>
-                    )}
-                  </ol>
+                  {/* What will happen, in one sentence, against the scene's own length */}
+                  {(() => {
+                    const count = headline.split('\n').filter((r) => r.trim()).length;
+                    if (!count) return null;
+                    const first = flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : 0.2;
+                    const gap = flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : null;
+                    const sceneLen = Number(lengthSeconds) > 0 ? Number(lengthSeconds) : null;
+                    const side =
+                      flyFrom === 'alternate' ? 'taking turns from the left and right' : `all from the ${flyFrom}`;
+                    const last = gap === null ? null : first + (count - 1) * gap;
+                    return (
+                      <p id="fly-plan" className="text-[11px] text-[#6B6256] bg-white border border-[#EAE3D4] rounded-xl p-2 leading-snug">
+                        {count} row{count === 1 ? '' : 's'}, {side}. The first arrives{' '}
+                        <span className="font-bold text-[#181614]">{first.toFixed(1)}s</span> into the scene
+                        {count > 1 && (
+                          gap === null ? (
+                            <>, the rest spread out over the scene.</>
+                          ) : (
+                            <>
+                              , then one every <span className="font-bold text-[#181614]">{gap.toFixed(1)}s</span>; the
+                              last at <span className="font-bold text-[#181614]">{last!.toFixed(1)}s</span>.
+                            </>
+                          )
+                        )}
+                        {count === 1 && '.'}
+                        {sceneLen !== null && <> The scene lasts {sceneLen.toFixed(1)}s.</>}
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
             </div>
