@@ -553,6 +553,24 @@ check(
 );
 check((await page.locator('#commercial-script-textarea').inputValue()).startsWith('My own line one.'), 'your script is still there');
 
+// The AI rewrite is shown to choose, never put straight into the script
+await page.route('**/api/polish-script', (route) =>
+  route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ script: 'A totally different script.' }) })
+);
+await page.locator('#polish-script-btn').click();
+await page.waitForTimeout(800);
+const scriptNow = () => page.locator('#commercial-script-textarea').inputValue();
+check((await page.locator('#polish-suggestion').count()) === 1 && (await scriptNow()).startsWith('My own line one.'), 'the AI rewrite waits to be chosen and leaves your script alone');
+await page.getByRole('button', { name: 'Keep my script' }).click();
+await page.waitForTimeout(200);
+check((await page.locator('#polish-suggestion').count()) === 0 && (await scriptNow()).startsWith('My own line one.'), 'keeping your script throws the rewrite away');
+await page.locator('#polish-script-btn').click();
+await page.waitForTimeout(800);
+await page.getByRole('button', { name: 'Use this version' }).click();
+await page.waitForTimeout(200);
+check((await scriptNow()) === 'A totally different script.', 'choosing the rewrite puts it in the script');
+await page.unroute('**/api/polish-script');
+
 // Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
 await toPreview();
 check((await page.locator('text=/Captions: (ON|OFF)/').count()) === 0, 'the preview has no captions switch');

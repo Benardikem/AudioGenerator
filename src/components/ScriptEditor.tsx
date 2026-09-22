@@ -29,6 +29,9 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
 }) => {
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishStyle, setPolishStyle] = useState('social_reels');
+  // The AI's rewrite waits here until the person chooses it; it never replaces the script by itself.
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [polishError, setPolishError] = useState<string | null>(null);
 
   const words = script.trim() ? script.trim().split(/\s+/).length : 0;
   // Natural social video voiceover pacing: ~130 words per minute (~2.15 words per second)
@@ -36,6 +39,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
 
   const handlePolishScript = async () => {
     setIsPolishing(true);
+    setPolishError(null);
     try {
       const res = await fetch('/api/polish-script', {
         method: 'POST',
@@ -44,10 +48,13 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
       });
       const data = await res.json();
       if (data.script) {
-        onChangeScript(data.script);
+        setSuggestion(data.script);
+      } else {
+        setPolishError(data.error || 'No rewrite came back. Try again.');
       }
     } catch (err) {
       console.error('Polish error:', err);
+      setPolishError('The rewrite could not be made. Try again.');
     } finally {
       setIsPolishing(false);
     }
@@ -133,6 +140,39 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
           )}
         </button>
       </div>
+
+      {polishError && <p className="text-xs text-[#B42318]">{polishError}</p>}
+
+      {suggestion !== null && (
+        <div id="polish-suggestion" className="p-4 rounded-2xl border-2 border-[#E8A317] bg-[#FBF8F1] space-y-3">
+          <div>
+            <h4 className="text-sm font-bold text-[#181614]">Suggested rewrite</h4>
+            <p className="text-xs text-[#6B6256]">Your script above is unchanged until you choose this version.</p>
+          </div>
+          <pre className="whitespace-pre-wrap font-sans text-sm text-[#181614] bg-white border border-[#EAE3D4] rounded-xl p-3 max-h-72 overflow-y-auto">
+            {suggestion}
+          </pre>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setSuggestion(null)}
+              className="px-4 py-2 text-xs font-bold text-[#181614] bg-white border border-[#EAE3D4] hover:bg-[#F4EEE2] rounded-xl cursor-pointer"
+            >
+              Keep my script
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChangeScript(suggestion);
+                setSuggestion(null);
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-[#181614] hover:bg-black rounded-xl cursor-pointer"
+            >
+              Use this version
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
