@@ -474,6 +474,50 @@ const labelPictureIn = labelFrames.find(([, l]) => l <= labelDarkest + 1.5)?.[0]
 const labelFirst = labelFrames.find(([t, , x]) => t > labelPictureIn && x > 8)?.[0] ?? 0;
 check(labelFirst - labelPictureIn >= 1000, `a scene with a small label keeps all its text back for the wait (first text ${Math.round(labelFirst - labelPictureIn)}ms after the picture)`);
 
+// The label can have its own wait: label at 0.3s, rows from 2.5s, on the same scene
+await editScene(2);
+await page.getByPlaceholder('With row 1').fill('0.3');
+await page.getByPlaceholder('0.2').fill('2.5');
+check(/The small label arrives 0\.3s after the picture is in/.test(await page.locator('#fly-plan').innerText()), 'the plan gives the label its own time');
+await apply();
+await toPreview();
+await page.locator('#preview-scene-list [data-scene-index="0"]').click();
+await page.waitForTimeout(1000);
+const ownTrace = page.evaluate(
+  () =>
+    new Promise((res) => {
+      const c = document.querySelector('canvas');
+      const g = c.getContext('2d', { willReadFrequently: true });
+      const out = [];
+      const t0 = performance.now();
+      const tick = () => {
+        const now = performance.now() - t0;
+        const d = g.getImageData(0, Math.round(c.height * 0.12), c.width, Math.round(c.height * 0.64)).data;
+        let lum = 0, text = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4 * 97) {
+          n++;
+          lum += d[i] + d[i + 1] + d[i + 2];
+          if ((d[i] > 160 && d[i + 1] > 150 && d[i + 2] > 140) || (d[i] > 200 && d[i + 1] > 130 && d[i + 2] < 90)) text++;
+        }
+        out.push([now, lum / n / 3, text]);
+        if (now < 8000) requestAnimationFrame(tick);
+        else res(out);
+      };
+      requestAnimationFrame(tick);
+    })
+);
+await playButton().click();
+const ownFrames = await ownTrace;
+await pauseButton().click();
+const ownDarkest = Math.min(...ownFrames.map(([, l]) => l));
+const ownIn = ownFrames.find(([, l]) => l <= ownDarkest + 1.5)?.[0] ?? 0;
+const labelSeen = ownFrames.find(([t, , x]) => t > ownIn && x > 8);
+const labelOnly = labelSeen ? labelSeen[2] : 0;
+const rowsSeen = ownFrames.find(([t, , x]) => t > ownIn && x > labelOnly * 3 + 20)?.[0] ?? 0;
+const labelMs = Math.round((labelSeen?.[0] ?? 0) - ownIn);
+const rowsMs = Math.round(rowsSeen - ownIn);
+check(labelMs >= 200 && labelMs < 1200 && rowsMs >= 2400, `the label keeps its own time, the rows theirs (label ${labelMs}ms, rows ${rowsMs}ms after the picture)`);
+
 // The scene list beside the preview follows playback, and there is no second row of scene buttons
 await newAd('List follows', Array.from({ length: 12 }, (_, i) => `Scene number ${i + 1} line.`));
 await toPreview();

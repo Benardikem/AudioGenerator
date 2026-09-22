@@ -118,6 +118,8 @@ export interface AdvertScene {
   flyDelay?: number;
   /** type 'text_side': seconds between one row and the next. Unset: spread across the scene. */
   flyGap?: number;
+  /** type 'text_side': seconds after the picture is in before the small label shows. Unset: with row 1. */
+  labelDelay?: number;
   /** A video clip that plays as this scene's background instead of imageSrc. */
   videoSrc?: string;
   /** What to do when the clip is shorter than the spoken line. Default: slow it to fit. */

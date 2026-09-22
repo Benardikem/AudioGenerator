@@ -765,10 +765,15 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
         // Side fly-in: the wait before row 1 counts from when the picture is fully in (counted
         // from the start of the dissolve, a 0.6s wait put row 1 just 0.2s behind the photo), and
         // the small label waits too — shown at once, it made scene 20 look as if the wait did
-        // nothing.
+        // nothing. The label can have a wait of its own; without one it comes with row 1.
         const firstAt = (currentSceneIndex > 0 ? SCENE_DISSOLVE : 0) + Math.max(0, activeScene.flyDelay ?? 0.2);
         if (eyebrow) {
-          const p = easeOut((t - (sideways ? firstAt : 0.12)) / 0.5);
+          const labelAt = !sideways
+            ? 0.12
+            : activeScene.labelDelay !== undefined
+            ? (currentSceneIndex > 0 ? SCENE_DISSOLVE : 0) + Math.max(0, activeScene.labelDelay)
+            : firstAt;
+          const p = easeOut((t - labelAt) / 0.5);
           ctx.save();
           ctx.globalAlpha = p;
           ctx.font = `800 30px ${FONT}`;

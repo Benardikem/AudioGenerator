@@ -59,6 +59,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
   const [flyFrom, setFlyFrom] = useState<'left' | 'right' | 'alternate'>('alternate');
   const [flyDelay, setFlyDelay] = useState('');
   const [flyGap, setFlyGap] = useState('');
+  const [labelDelay, setLabelDelay] = useState('');
   const [videoSrc, setVideoSrc] = useState('');
   const [clipUploading, setClipUploading] = useState(false);
   const [clipError, setClipError] = useState<string | null>(null);
@@ -86,6 +87,7 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       setFlyFrom(scene.flyFrom || 'alternate');
       setFlyDelay(scene.flyDelay !== undefined ? String(scene.flyDelay) : '');
       setFlyGap(scene.flyGap !== undefined ? String(scene.flyGap) : '');
+      setLabelDelay(scene.labelDelay !== undefined ? String(scene.labelDelay) : '');
       setVideoSrc(scene.videoSrc || '');
       setClipFit(scene.clipFit || 'slow');
       setLengthSeconds(scene.lengthSeconds ? String(scene.lengthSeconds) : '');
@@ -230,6 +232,10 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
       flyFrom: sceneType === 'text_side' && flyFrom !== 'alternate' ? flyFrom : undefined,
       flyDelay: sceneType === 'text_side' && flyDelay.trim() !== '' && Number(flyDelay) >= 0 ? Number(flyDelay) : undefined,
       flyGap: sceneType === 'text_side' && flyGap.trim() !== '' && Number(flyGap) >= 0 ? Number(flyGap) : undefined,
+      labelDelay:
+        sceneType === 'text_side' && eyebrow.trim() && labelDelay.trim() !== '' && Number(labelDelay) >= 0
+          ? Number(labelDelay)
+          : undefined,
     });
     onClose();
   };
@@ -1054,6 +1060,23 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                       />
                     </label>
                   </div>
+                  {eyebrow.trim() && (
+                    <label className="block">
+                      <span className="block text-xs font-bold text-[#181614] mb-1">Wait before the small label (seconds)</span>
+                      <span className="block text-[10px] text-[#6B6256] -mt-0.5 mb-1">
+                        counted from when the picture is fully in · leave empty to bring it in with row 1
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.1}
+                        value={labelDelay}
+                        onChange={(e) => setLabelDelay(e.target.value)}
+                        placeholder="With row 1"
+                        className="w-full p-2 text-xs bg-white border border-[#EAE3D4] rounded-xl outline-hidden text-[#181614]"
+                      />
+                    </label>
+                  )}
                   {/* What will happen, in one sentence, against the scene's own length */}
                   {(() => {
                     const count = headline.split('\n').filter((r) => r.trim()).length;
@@ -1079,7 +1102,16 @@ export const EditSceneModal: React.FC<EditSceneModalProps> = ({
                           )
                         )}
                         {count === 1 && '.'}
-                        {eyebrow.trim() && <> The small label arrives with row 1.</>}
+                        {eyebrow.trim() &&
+                          (labelDelay.trim() !== '' && Number(labelDelay) >= 0 ? (
+                            <>
+                              {' '}The small label arrives{' '}
+                              <span className="font-bold text-[#181614]">{Number(labelDelay).toFixed(1)}s</span> after the
+                              picture is in.
+                            </>
+                          ) : (
+                            <> The small label arrives with row 1.</>
+                          ))}
                         {sceneLen !== null && <> The scene lasts {sceneLen.toFixed(1)}s.</>}
                       </p>
                     );
