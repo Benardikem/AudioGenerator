@@ -175,8 +175,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
   }, []);
 
   // Subtitle burned-in settings
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
-  const [subtitleStyle, setSubtitleStyle] = useState<'gold_capsule' | 'star_contrast' | 'sand_card'>('gold_capsule');
 
   // Director's Scene Visual Action Banner on canvas (off by default for clean commercial output)
 
@@ -396,8 +394,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
     }
   }, [currentSceneIndex, onSceneChange, isPlaying]);
 
-  // Current active subtitle text
-  const currentCue = cues.find((c) => currentTime >= c.start && currentTime <= c.end);
 
   // Audio setup
   useEffect(() => {
@@ -1488,70 +1484,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       }
 
       // ----------------------------------------------------
-      // BURNED-IN SPOKEN CAPTIONS (Near the bottom, strictly adhering to brand colors)
-      // ----------------------------------------------------
-      if (subtitlesEnabled && currentCue) {
-        const text = currentCue.text;
-        ctx.save();
-
-        const capY = H - 240;
-        ctx.font = 'bold 44px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        const textMetrics = ctx.measureText(text);
-        const textW = textMetrics.width;
-        const boxPadX = 48;
-        const boxPadY = 24;
-        const boxW = Math.min(W - 120, textW + boxPadX * 2);
-        const boxH = 92;
-        const boxX = (W - boxW) / 2;
-
-        if (subtitleStyle === 'gold_capsule') {
-          // White pill with gold border and near-black text
-          ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-          ctx.shadowBlur = 24;
-          ctx.fillStyle = BRAND_COLORS.white;
-          ctx.beginPath();
-          ctx.roundRect(boxX, capY - boxPadY, boxW, boxH, 46);
-          ctx.fill();
-          ctx.strokeStyle = BRAND_COLORS.gold;
-          ctx.lineWidth = 4;
-          ctx.stroke();
-
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = BRAND_COLORS.nearBlack;
-          ctx.textAlign = 'center';
-          ctx.fillText(text, W / 2, capY + 36);
-        } else if (subtitleStyle === 'star_contrast') {
-          // Darker sand/near-black with Star Gold highlight
-          ctx.fillStyle = 'rgba(24, 22, 20, 0.9)';
-          ctx.beginPath();
-          ctx.roundRect(boxX, capY - boxPadY, boxW, boxH, 20);
-          ctx.fill();
-          ctx.strokeStyle = BRAND_COLORS.borders;
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          ctx.fillStyle = BRAND_COLORS.starGold;
-          ctx.textAlign = 'center';
-          ctx.fillText(text, W / 2, capY + 36);
-        } else {
-          // Light sand card with near-black text
-          ctx.fillStyle = BRAND_COLORS.sand;
-          ctx.beginPath();
-          ctx.roundRect(boxX, capY - boxPadY, boxW, boxH, 24);
-          ctx.fill();
-          ctx.strokeStyle = BRAND_COLORS.borders;
-          ctx.lineWidth = 3;
-          ctx.stroke();
-
-          ctx.fillStyle = BRAND_COLORS.nearBlack;
-          ctx.textAlign = 'center';
-          ctx.fillText(text, W / 2, capY + 36);
-        }
-
-        ctx.restore();
-      }
-
-      // ----------------------------------------------------
       // TOP BRAND WATERMARK (Official Kudu + Name)
       // Adjusted with padding-left: -20px (X: 40) and high-contrast protective pill so the icon is never hidden
       // ----------------------------------------------------
@@ -1676,7 +1608,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
       tctx?.drawImage(canvas, offsetX, offsetY, W * fit, H * fit, 0, 0, tiny.width, tiny.height);
     }
     },
-    [sceneList, cues, subtitlesEnabled, subtitleStyle, spans]
+    [sceneList, cues, spans]
   );
 
   // Render static frame when paused or when time/scene/subtitles change
@@ -2129,7 +2061,7 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
               </div>
             </div>
             <p className="text-xs text-[#6B6256]">
-              Nigerian Pidgin Voiceover • {sceneList.length} Synchronized Scenes • Burned-in Captions
+              Nigerian Pidgin Voiceover • {sceneList.length} Synchronized Scenes
             </p>
           </div>
         </div>
@@ -2435,21 +2367,6 @@ export const SocialVideoOverlay: React.FC<SocialVideoOverlayProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-
-                {/* Subtitles Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
-                  className={`px-2 py-1 rounded-lg font-semibold text-[11px] transition-all cursor-pointer border ${
-                    subtitlesEnabled
-                      ? 'bg-[#181614] text-white border-[#181614]'
-                      : 'bg-[#F4EEE2] text-[#6B6256] border-[#EAE3D4]'
-                  }`}
-                >
-                  Captions: {subtitlesEnabled ? 'ON' : 'OFF'}
-                </button>
-              </div>
             </div>
 
             {/* Audio Status & Bed Selector */}

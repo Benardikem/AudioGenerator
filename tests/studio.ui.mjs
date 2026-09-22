@@ -300,6 +300,10 @@ for (let i = 0; i < 40 && (await readTime()) < 4; i++) await page.waitForTimeout
 const inkAfter = await ink();
 check(inkBefore < 5 && inkWaiting < 5 && inkAfter > 40, `side fly-in rows wait, then arrive while the scene plays (${inkBefore} → ${inkWaiting} → ${inkAfter})`);
 
+// Captions were taken out: the ads carry their own text, and captions on top made scenes noisy
+await toPreview();
+check((await page.locator('text=/Captions: (ON|OFF)/').count()) === 0, 'the preview has no captions switch');
+
 check(pageErrors.length === 0, `no errors in the page (${pageErrors.slice(0, 2).join(' | ')})`);
 
 await browser.close();
